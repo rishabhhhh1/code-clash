@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
@@ -195,7 +195,7 @@ router.post('/', authenticate, validate(createBattleSchema), async (req: AuthReq
         topics,
         timeControl,
         isPublic,
-        inviteCode: !isPublic ? uuidv4().substring(0, 8).toUpperCase() : null,
+        inviteCode: !isPublic ? randomUUID().substring(0, 8).toUpperCase() : null,
       },
       include: BATTLE_INCLUDE,
     });
