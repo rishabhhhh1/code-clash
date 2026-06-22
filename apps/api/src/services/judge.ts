@@ -55,7 +55,7 @@ const LANG_CONFIG: Record<string, LangConfig> = {
   },
   python: {
     ext: '.py',
-    run: (src: string) => `python3 "${src}"`,
+    run: (src: string) => `python "${src}"`,
   },
   javascript: {
     ext: '.js',
@@ -341,7 +341,7 @@ async function runAsChildProcess(
       }
       runCmd = `java -cp "${workDir}" Solution`;
     } else if (language === 'python') {
-      runCmd = `python3 "${srcFile}"`;
+      runCmd = `python "${srcFile}"`;
     } else if (language === 'javascript') {
       runCmd = `node "${srcFile}"`;
     } else {
@@ -406,6 +406,24 @@ function normalizeOutput(output: string): string {
   } catch {
     return trimmed;
   }
+}
+
+export async function executeCode(
+  code: string,
+  language: string,
+  input: string,
+  timeLimitMs: number = config.judgeTimeoutMs,
+  memoryLimitMb: number = config.judgeMemoryLimitMb
+): Promise<{ stdout: string; stderr: string; exitCode: number; runtime: number; compilationOutput?: string }> {
+  const useDocker = isDockerAvailable();
+  const runner = useDocker ? runInDocker : runAsChildProcess;
+  const result = await runner(code, language, input, timeLimitMs, memoryLimitMb);
+
+  if (result.exitCode === -1 && result.stderr.includes('error:')) {
+    return { ...result, compilationOutput: result.stderr };
+  }
+
+  return result;
 }
 
 export async function judgeCode(

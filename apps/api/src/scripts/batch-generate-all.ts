@@ -16,6 +16,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { generateNumberOfIslandsTestCases } from '../services/testcase-generators';
 
 const prisma = new PrismaClient();
 
@@ -1549,8 +1550,54 @@ async function generateAllContent() {
   await prisma.$disconnect();
 }
 
-generateAllContent().catch((err) => {
-  console.error('Fatal error:', err);
-  prisma.$disconnect();
-  process.exit(1);
-});
+const isMainModule = process.argv[1]?.replace(/\\/g, '/').includes('batch-generate-all');
+
+if (isMainModule) {
+  generateAllContent().catch((err) => {
+    console.error('Fatal error:', err);
+    prisma.$disconnect();
+    process.exit(1);
+  });
+}
+
+export {
+  KNOWN_PROBLEMS,
+  generateGenericContent,
+  generateTwoSumTestCases,
+  generateValidParenthesesTestCases,
+  generateClimbingStairsTestCases,
+  generateReverseIntegerTestCases,
+  generatePalindromNumberTestCases,
+  generateMaximumSubarrayTestCases,
+  generateCoinChangeTestCases,
+  generateGenericTestCases,
+};
+
+export function getKnownTestCases(slug: string, count: number, difficulty: string): TestCase[] {
+  switch (slug) {
+    case 'two-sum':
+      return generateTwoSumTestCases(count);
+    case 'valid-parentheses':
+      return generateValidParenthesesTestCases(count);
+    case 'climbing-stairs':
+      return generateClimbingStairsTestCases(count);
+    case 'reverse-integer':
+      return generateReverseIntegerTestCases(count);
+    case 'palindrome-number':
+      return generatePalindromNumberTestCases(count);
+    case 'maximum-subarray':
+      return generateMaximumSubarrayTestCases(count);
+    case 'coin-change':
+      return generateCoinChangeTestCases(count);
+    case 'number-of-islands': {
+      const base = generateNumberOfIslandsTestCases() as TestCase[];
+      while (base.length < count) {
+        const template = base[base.length % base.length];
+        base.push({ ...template, isHidden: base.length >= 5 });
+      }
+      return base.slice(0, count);
+    }
+    default:
+      return generateGenericTestCases(count, difficulty);
+  }
+}

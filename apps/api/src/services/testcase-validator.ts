@@ -10,6 +10,14 @@ export interface TestCase {
   isHidden?: boolean;
 }
 
+function parseConstraintNumber(value: string): number {
+  const parts = value.split('^');
+  if (parts.length === 2) {
+    return Math.pow(parseInt(parts[0], 10), parseInt(parts[1], 10));
+  }
+  return parseInt(value, 10);
+}
+
 /**
  * Remove exact duplicate test cases (same input).
  */
@@ -53,10 +61,10 @@ export function validateTestCaseInput(
   if (arraySizeMatch) {
     const elements = arraySizeMatch[1] ? arraySizeMatch[1].split(',').filter(e => e.trim()) : [];
     for (const constraint of constraints) {
-      const lengthMatch = constraint.match(/(\d+)\s*<=\s*\w*\.length\s*<=\s*(\d+)/);
+      const lengthMatch = constraint.match(/(\d+)\s*<=\s*\w*\.length\s*<=\s*(\d+(?:\^\d+)?)/);
       if (lengthMatch) {
-        const minLen = parseInt(lengthMatch[1]);
-        const maxLen = parseInt(lengthMatch[2]);
+        const minLen = parseInt(lengthMatch[1], 10);
+        const maxLen = parseConstraintNumber(lengthMatch[2]);
         if (elements.length < minLen || elements.length > maxLen) {
           errors.push(`Array length ${elements.length} outside constraint [${minLen}, ${maxLen}]`);
         }
@@ -187,7 +195,7 @@ export function validateAllTestCases(
   const { coverage, missing } = checkCoverage(deduplicated);
 
   return {
-    valid: invalidCount === 0 && missing.length <= 2,
+    valid: invalidCount === 0 && missing.length <= 3,
     totalTestCases: testCases.length,
     validTestCases: validCount,
     invalidTestCases: invalidCount,

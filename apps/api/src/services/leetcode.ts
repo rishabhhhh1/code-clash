@@ -214,11 +214,21 @@ function parseStats(statsStr: string): { likes: number; dislikes: number; accept
   return { likes, dislikes, acceptanceRate };
 }
 
-export async function fetchProblemFromLeetCode(slug: string): Promise<FetchResult> {
+export async function fetchProblemFromLeetCode(slug: string, force = false): Promise<FetchResult> {
   try {
     // First check if we already have it with full content
     const existing = await prisma.problem.findUnique({ where: { slug } });
-    if (existing && existing.description && existing.description.length > 200 && !existing.description.includes('imported from LeetCode')) {
+    if (
+      !force &&
+      existing &&
+      existing.description &&
+      existing.description.length > 200 &&
+      !existing.description.includes('imported from LeetCode') &&
+      existing.inputFormat &&
+      existing.outputFormat &&
+      Array.isArray(existing.examples) &&
+      (existing.examples as unknown[]).length > 0
+    ) {
       return { success: true, data: undefined }; // Already have full content
     }
 
@@ -298,7 +308,7 @@ export async function fetchProblemFromLeetCode(slug: string): Promise<FetchResul
   }
 }
 
-export async function syncProblemContent(problemId: string): Promise<FetchResult> {
+export async function syncProblemContent(problemId: string, force = false): Promise<FetchResult> {
   const problem = await prisma.problem.findUnique({ where: { id: problemId } });
   if (!problem) return { success: false, error: 'Problem not found in database' };
 
@@ -309,7 +319,7 @@ export async function syncProblemContent(problemId: string): Promise<FetchResult
     if (match) slug = match[1];
   }
 
-  const result = await fetchProblemFromLeetCode(slug);
+  const result = await fetchProblemFromLeetCode(slug, force);
   if (!result.success || !result.data) return result;
 
   const d = result.data;

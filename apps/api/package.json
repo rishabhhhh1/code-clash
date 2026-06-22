@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "import:problems": "tsx prisma/importProblems.ts",
-    "sync:all": "tsx src/scripts/sync-all-problems.ts"
+    "sync:all": "tsx src/scripts/sync-all-problems.ts",
+    "populate:problems": "tsx src/scripts/populate-incomplete-problems.ts"
   },
   "dependencies": {
     "@codeclash/shared": "*",

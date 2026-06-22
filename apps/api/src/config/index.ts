@@ -43,10 +43,10 @@ export const config = {
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o',
   openaiBaseUrl: process.env.OPENAI_BASE_URL || undefined,
   
-  // Test case generation limits per difficulty
+  // Test case generation limits per difficulty (visible + hidden = total minimum)
   testCasesPerDifficulty: {
-    easy:   { visible: 10,  hidden: 100 },
-    medium: { visible: 20,  hidden: 300 },
-    hard:   { visible: 30,  hidden: 1000 },
+    easy:   { visible: 10,  hidden: 90,  total: 100 },
+    medium: { visible: 20,  hidden: 280, total: 300 },
+    hard:   { visible: 30,  hidden: 470, total: 500 },
   },
 };

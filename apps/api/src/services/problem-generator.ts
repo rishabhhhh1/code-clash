@@ -1,17 +1,25 @@
 import { prisma } from '../config/database';
-import { generateProblemContent, generateTestCasesForProblem, GeneratedTestCase } from './ai-problem-generator';
-import { getAlgorithmicTestCases, TestCase as AlgoTestCase } from './testcase-generators';
+import { generateProblemContent, generateTestCasesForProblem } from './ai-problem-generator';
+import { getAlgorithmicTestCases } from './testcase-generators';
 import { config } from '../config';
+import {
+  assignHiddenFlags,
+  getMinTestCaseCount,
+  getVisibleTestCaseCount,
+  parseStoredTestCases,
+  splitTestCases,
+  StoredTestCase,
+  validateProblemTestCases,
+} from './problem-completion';
+import {
+  pickReferenceSolution,
+  resolveExpectedOutputs,
+  InputOnlyTestCase,
+} from './reference-output';
+import { deduplicateTestCases } from './testcase-validator';
 
 // In-memory lock to prevent concurrent generation for the same problem
 const generationLocks = new Map<string, Promise<void>>();
-
-interface StoredTestCase {
-  input: string;
-  expectedOutput: string;
-  category: string;
-  isHidden: boolean;
-}
 
 /**
  * Ensure a problem has been fully generated (content + test cases).
@@ -22,16 +30,13 @@ export async function ensureProblemGenerated(problemId: string): Promise<void> {
   const problem = await prisma.problem.findUnique({ where: { id: problemId } });
   if (!problem) throw new Error('Problem not found');
 
-  // Already generated
   if (problem.generationStatus === 'completed') return;
 
-  // Check for existing lock
   if (generationLocks.has(problemId)) {
     await generationLocks.get(problemId);
     return;
   }
 
-  // Create new lock
   const lock = doGenerate(problemId);
   generationLocks.set(problemId, lock);
 
@@ -43,7 +48,6 @@ export async function ensureProblemGenerated(problemId: string): Promise<void> {
 }
 
 async function doGenerate(problemId: string): Promise<void> {
-  // Mark as in progress
   await prisma.problem.update({
     where: { id: problemId },
     data: { generationStatus: 'in_progress' },
@@ -55,11 +59,13 @@ async function doGenerate(problemId: string): Promise<void> {
 
     console.log(`[Generator] Starting generation for: ${problem.title} (${problem.difficulty})`);
 
-    // Step 1: Generate problem content (description, examples, constraints, starter code)
     const needsContent =
-      !problem.description ||
-      problem.description.length < 50 ||
-      problem.description.includes('imported from LeetCode');
+      !problem.inputFormat ||
+      !problem.outputFormat ||
+      !Array.isArray(problem.examples) ||
+      problem.examples.length === 0 ||
+      !Array.isArray(problem.constraints) ||
+      problem.constraints.length === 0;
 
     let content = null;
     if (needsContent && config.openaiApiKey) {
@@ -76,35 +82,29 @@ async function doGenerate(problemId: string): Promise<void> {
       }
     }
 
-    // Step 2: Generate test cases
-    const hasTestCases = ((problem.visibleTestCases as unknown as StoredTestCase[]) || []).length > 0 &&
-                         ((problem.hiddenTestCases as unknown as StoredTestCase[]) || []).length > 0;
+    const existingCases = parseStoredTestCases(problem.testCases);
+    const minCount = getMinTestCaseCount(problem.difficulty);
+    const constraints = (content?.constraints || (problem.constraints as string[]) || []) as string[];
 
-    let visibleTestCases: StoredTestCase[] = [];
-    let hiddenTestCases: StoredTestCase[] = [];
+    let testCases: StoredTestCase[] = existingCases;
 
-    if (!hasTestCases) {
-      const generated = await generateAllTestCases(
+    if (testCases.length < minCount) {
+      testCases = await generateAllTestCases(
         problem.title,
         problem.slug,
         problem.difficulty,
         problem.topics,
         content?.inputFormat || problem.inputFormat || '',
         content?.outputFormat || problem.outputFormat || '',
-        content?.constraints || (problem.constraints as string[]) || []
+        constraints,
+        (problem.referenceSolutions as Record<string, string> | null) || content?.referenceSolutions || null
       );
-      visibleTestCases = generated.visible;
-      hiddenTestCases = generated.hidden;
-      console.log(`[Generator] Generated ${visibleTestCases.length} visible + ${hiddenTestCases.length} hidden test cases for: ${problem.title}`);
-    } else {
-      visibleTestCases = ((problem.visibleTestCases as unknown as StoredTestCase[]) || []);
-      hiddenTestCases = ((problem.hiddenTestCases as unknown as StoredTestCase[]) || []);
+      console.log(`[Generator] Generated ${testCases.length} test cases for: ${problem.title}`);
     }
 
-    // Step 3: Save everything
+    const validation = validateProblemTestCases(testCases, constraints, problem.difficulty);
+
     const updateData: any = {
-      generationStatus: 'completed',
-      generatedAt: new Date(),
       generationError: null,
     };
 
@@ -122,13 +122,18 @@ async function doGenerate(problemId: string): Promise<void> {
       updateData.referenceSolutions = content.referenceSolutions;
     }
 
-    if (visibleTestCases.length > 0) {
-      updateData.visibleTestCases = visibleTestCases;
+    if (testCases.length > 0) {
+      updateData.testCases = testCases;
+      updateData.totalTestCases = testCases.length;
     }
-    if (hiddenTestCases.length > 0) {
-      updateData.hiddenTestCases = hiddenTestCases;
+
+    if (validation.valid) {
+      updateData.generationStatus = 'completed';
+      updateData.generatedAt = new Date();
+    } else {
+      updateData.generationStatus = 'failed';
+      updateData.generationError = validation.errors.join('; ').slice(0, 500);
     }
-    updateData.totalTestCases = visibleTestCases.length + hiddenTestCases.length;
 
     await prisma.problem.update({
       where: { id: problemId },
@@ -155,32 +160,27 @@ async function generateAllTestCases(
   topics: string[],
   inputFormat: string,
   outputFormat: string,
-  constraints: string[]
-): Promise<{ visible: StoredTestCase[]; hidden: StoredTestCase[] }> {
-  const tcConfig = config.testCasesPerDifficulty[difficulty as keyof typeof config.testCasesPerDifficulty]
-    || config.testCasesPerDifficulty.medium;
+  constraints: string[],
+  referenceSolutions: Record<string, string> | null
+): Promise<StoredTestCase[]> {
+  const minCount = getMinTestCaseCount(difficulty);
+  const inputCases: InputOnlyTestCase[] = [];
 
-  // Try algorithmic generators first
   const algoCases = getAlgorithmicTestCases(slug);
-
-  let allCases: StoredTestCase[] = [];
-
-  if (algoCases && algoCases.length > 0) {
-    // Use algorithmic test cases as the base
-    allCases = algoCases.map((tc) => ({
-      input: tc.input,
-      expectedOutput: tc.expectedOutput,
-      category: tc.category,
-      isHidden: false,
-    }));
-    console.log(`[Generator] Using ${allCases.length} algorithmic test cases for: ${slug}`);
+  if (algoCases?.length) {
+    for (const tc of algoCases) {
+      inputCases.push({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        category: tc.category,
+      });
+    }
+    console.log(`[Generator] Using ${algoCases.length} algorithmic test cases for: ${slug}`);
   }
 
-  // Generate additional test cases with AI if needed
-  const remainingHidden = Math.max(0, tcConfig.hidden - allCases.length);
-  const remainingVisible = Math.max(0, tcConfig.visible - allCases.filter(tc => !tc.isHidden).length);
+  const remaining = minCount - inputCases.length;
 
-  if (config.openaiApiKey && (remainingHidden > 0 || remainingVisible > 0)) {
+  if (config.openaiApiKey && remaining > 0) {
     try {
       const aiCases = await generateTestCasesForProblem(
         title,
@@ -189,64 +189,37 @@ async function generateAllTestCases(
         inputFormat,
         outputFormat,
         constraints,
-        remainingHidden + remainingVisible
+        remaining
       );
 
-      // Split into visible and hidden
-      let visibleCount = 0;
-      let hiddenCount = 0;
-
       for (const tc of aiCases) {
-        if (visibleCount < remainingVisible) {
-          allCases.push({
-            input: tc.input,
-            expectedOutput: tc.expectedOutput,
-            category: tc.category,
-            isHidden: false,
-          });
-          visibleCount++;
-        } else if (hiddenCount < remainingHidden) {
-          allCases.push({
-            input: tc.input,
-            expectedOutput: tc.expectedOutput,
-            category: tc.category,
-            isHidden: true,
-          });
-          hiddenCount++;
-        }
+        inputCases.push({ input: tc.input, category: tc.category });
       }
 
-      console.log(`[Generator] AI generated ${aiCases.length} additional test cases for: ${slug}`);
+      console.log(`[Generator] AI generated ${aiCases.length} additional inputs for: ${slug}`);
     } catch (err: any) {
       console.error(`[Generator] AI test case generation failed for ${slug}:`, err.message);
     }
   }
 
-  // Ensure minimum counts by duplicating with variations if needed
-  while (allCases.filter(tc => !tc.isHidden).length < tcConfig.visible) {
-    const base = allCases[Math.floor(Math.random() * Math.max(1, allCases.length))];
-    allCases.push({
-      input: base?.input || '[]',
-      expectedOutput: base?.expectedOutput || '[]',
-      category: 'basic',
-      isHidden: false,
-    });
+  const ref = pickReferenceSolution(referenceSolutions);
+  if (!ref) {
+    throw new Error('No reference solution available for test case output computation');
   }
 
-  while (allCases.filter(tc => tc.isHidden).length < tcConfig.hidden) {
-    const base = allCases[Math.floor(Math.random() * Math.max(1, allCases.length))];
-    allCases.push({
-      input: base?.input || '[]',
-      expectedOutput: base?.expectedOutput || '[]',
-      category: 'stress',
-      isHidden: true,
-    });
+  const resolved = await resolveExpectedOutputs(ref.code, ref.language, inputCases);
+  const deduped = deduplicateTestCases(resolved) as StoredTestCase[];
+
+  if (deduped.length < minCount) {
+    throw new Error(`Only ${deduped.length} test cases after resolution, need ${minCount}`);
   }
 
-  const visible = allCases.filter(tc => !tc.isHidden);
-  const hidden = allCases.filter(tc => tc.isHidden);
+  return assignHiddenFlags(deduped, difficulty);
+}
 
-  return { visible, hidden };
+function getTestCasesFromProblem(problem: { testCases: unknown; difficulty: string }) {
+  const all = parseStoredTestCases(problem.testCases);
+  return splitTestCases(all, problem.difficulty);
 }
 
 /**
@@ -254,8 +227,12 @@ async function generateAllTestCases(
  */
 export async function getVisibleTestCases(problemId: string): Promise<StoredTestCase[]> {
   await ensureProblemGenerated(problemId);
-  const problem = await prisma.problem.findUnique({ where: { id: problemId } });
-  return ((problem?.visibleTestCases as unknown as StoredTestCase[]) || []);
+  const problem = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: { testCases: true, difficulty: true },
+  });
+  if (!problem) return [];
+  return getTestCasesFromProblem(problem).visible;
 }
 
 /**
@@ -263,8 +240,12 @@ export async function getVisibleTestCases(problemId: string): Promise<StoredTest
  */
 export async function getHiddenTestCases(problemId: string): Promise<StoredTestCase[]> {
   await ensureProblemGenerated(problemId);
-  const problem = await prisma.problem.findUnique({ where: { id: problemId } });
-  return ((problem?.hiddenTestCases as unknown as StoredTestCase[]) || []);
+  const problem = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: { testCases: true, difficulty: true },
+  });
+  if (!problem) return [];
+  return getTestCasesFromProblem(problem).hidden;
 }
 
 /**
@@ -272,8 +253,9 @@ export async function getHiddenTestCases(problemId: string): Promise<StoredTestC
  */
 export async function getAllTestCases(problemId: string): Promise<StoredTestCase[]> {
   await ensureProblemGenerated(problemId);
-  const problem = await prisma.problem.findUnique({ where: { id: problemId } });
-  const visible = (problem?.visibleTestCases as unknown as StoredTestCase[]) || [];
-  const hidden = (problem?.hiddenTestCases as unknown as StoredTestCase[]) || [];
-  return [...visible, ...hidden];
+  const problem = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: { testCases: true },
+  });
+  return parseStoredTestCases(problem?.testCases);
 }
