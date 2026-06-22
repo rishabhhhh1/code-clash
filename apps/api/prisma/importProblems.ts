@@ -392,7 +392,9 @@ async function importProblems() {
         examples: examples as any,
         constraints: [] as any,
         hints: null,
-        testCases: [] as any,
+        visibleTestCases: [] as any,
+        hiddenTestCases: [] as any,
+        totalTestCases: 0,
         topics,
         category,
         companies: [] as string[],
@@ -410,6 +412,7 @@ async function importProblems() {
         dislikes: isNaN(dislikes as number) ? null : dislikes,
         isPremium,
         isActive: true,
+        generationStatus: 'pending',
       };
 
       batches.push(problemData);

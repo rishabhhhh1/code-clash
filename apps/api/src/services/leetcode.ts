@@ -23,6 +23,9 @@ interface LeetCodeProblem {
   stats: string;
   sampleTestCase: string;
   metaInfo: { name: string; value: string }[];
+  similarQuestions: string;
+  translatedTitle?: string;
+  translatedContent?: string;
 }
 
 interface FetchResult {
@@ -38,6 +41,7 @@ interface FetchResult {
     examples: any[];
     constraints: string[];
     hints: string[];
+    explanation: string;
     topics: string[];
     starterCodeCpp: string;
     starterCodeJava: string;
@@ -46,6 +50,12 @@ interface FetchResult {
     likes: number;
     dislikes: number;
     acceptanceRate: number;
+    totalAccepted: number;
+    totalSubmitted: number;
+    sampleTestCases: any[];
+    functionSignature: any;
+    similarQuestions: any[];
+    metaInfo: any;
   };
   error?: string;
 }

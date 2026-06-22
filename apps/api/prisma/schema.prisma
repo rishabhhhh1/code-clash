@@ -110,7 +110,7 @@ model Problem {
   examples      Json     @default("[]") // TestCase[]
   constraints   Json     @default("[]") // string[]
   hints         Json?    // string[] (optional hints)
-  testCases     Json     @default("[]") // TestCase[] (hidden from users)
+  explanation   String?  // Detailed explanation/editorial
   topics        String[] // Topic[]
   category      String?  // Algorithms, Database, Shell, etc.
   companies     String[] // companies that asked this
@@ -128,6 +128,24 @@ model Problem {
   dislikes     Int?      // LeetCode dislikes
   isPremium     Boolean  @default(false)
   isActive      Boolean  @default(true) // can be toggled for admin
+
+  // Lazy generation fields
+  generationStatus  String   @default("pending") // pending, in_progress, completed, failed
+  generatedAt       DateTime?
+  generationError   String?  // error message if generation failed
+  referenceSolutions Json?   // { cpp, java, python, javascript } reference optimal solutions
+
+  // Test case distribution
+  visibleTestCases  Json     @default("[]") // TestCase[] shown to users before submission (sample test cases)
+  hiddenTestCases   Json     @default("[]") // TestCase[] used during submission (hidden test cases)
+  totalTestCases    Int      @default(0)    // total test case count for display
+
+  // Additional fields for LeetCode sync
+  sampleTestCases   Json     @default("[]") // Original sample test cases from LeetCode
+  functionSignature Json?    // Function signature info per language
+  similarQuestions  Json?    // Similar LeetCode questions
+  metaInfo          Json?    // Additional meta info from LeetCode
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -140,6 +158,7 @@ model Problem {
   @@index([leetcodeId])
   @@index([category])
   @@index([isActive])
+  @@index([generationStatus])
 }
 
 // Battle model
@@ -198,21 +217,22 @@ model BattlePlayer {
 // Submission model
 model Submission {
   id          String   @id @default(uuid())
-  battleId    String
+  battleId    String?
   userId      String
   problemId   String
   code        String
   language    String   // cpp, java, python, javascript
-  status      String   @default("pending") // pending, accepted, wrong_answer, etc.
+  status      String   @default("pending") // pending, accepted, wrong_answer, time_limit, runtime_error, compilation_error, memory_limit
   runtime     Int?     // ms
   memory      Int?     // KB
   score       Int      @default(0)
+  testResults Json?    // TestResult[] detailed per-test-case results (only for practice mode)
   createdAt   DateTime @default(now())
 
   // Relations
-  battle  Battle  @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem Problem @relation(fields: [problemId], references: [id])
+  battle  Battle?  @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem  @relation(fields: [problemId], references: [id])
 
   @@index([battleId])
   @@index([userId])

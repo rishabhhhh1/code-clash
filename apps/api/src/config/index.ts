@@ -16,10 +16,6 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   
   // OAuth - Google
-  // The redirect_uri sent to Google must EXACTLY match what is registered in Google Cloud Console
-  // Frontend redirects user to: https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=<this value>
-  // Google redirects back to this URL with ?code=... 
-  // Backend then exchanges the code sending the SAME redirect_uri to Google's token endpoint
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
@@ -40,4 +36,17 @@ export const config = {
   // Judge
   judgeDockerImage: process.env.JUDGE_DOCKER_IMAGE || 'codeclash-judge:latest',
   judgeTimeoutMs: parseInt(process.env.JUDGE_TIMEOUT_MS || '10000', 10),
+  judgeMemoryLimitMb: parseInt(process.env.JUDGE_MEMORY_LIMIT_MB || '256', 10),
+  
+  // AI - OpenAI
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  openaiModel: process.env.OPENAI_MODEL || 'gpt-4o',
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || undefined,
+  
+  // Test case generation limits per difficulty
+  testCasesPerDifficulty: {
+    easy:   { visible: 10,  hidden: 100 },
+    medium: { visible: 20,  hidden: 300 },
+    hard:   { visible: 30,  hidden: 1000 },
+  },
 };

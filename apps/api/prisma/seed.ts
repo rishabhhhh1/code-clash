@@ -645,7 +645,7 @@ async function main() {
   // Clear existing problems
   await prisma.problem.deleteMany();
 
-  // Insert problems
+  // Insert problems with new schema fields
   for (const problem of problems) {
     await prisma.problem.create({
       data: {
@@ -658,10 +658,13 @@ async function main() {
         examples: problem.examples,
         constraints: problem.constraints,
         hints: problem.hints,
-        testCases: problem.testCases,
+        visibleTestCases: problem.testCases,
+        hiddenTestCases: problem.testCases,
+        totalTestCases: problem.testCases.length,
         topics: problem.topics,
         timeLimit: problem.timeLimit,
         memoryLimit: problem.memoryLimit,
+        generationStatus: 'completed',
       },
     });
   }

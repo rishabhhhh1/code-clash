@@ -5,6 +5,8 @@ import { prisma } from '../../config/database';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { AppError } from '../../middleware/error';
+import { ensureProblemGenerated, getVisibleTestCases, getAllTestCases } from '../../services/problem-generator';
+import { judgeCode } from '../../services/judge';
 
 const router = Router();
 
@@ -336,15 +338,19 @@ router.post('/:code/leave', authenticate, async (req: AuthRequest, res, next) =>
   }
 });
 
-// POST submit solution
+// POST submit solution - REAL JUDGE
 router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const { code } = req.params;
     const { language, code: submittedCode } = req.body;
 
+    if (!submittedCode || !language) {
+      throw new AppError(400, 'Code and language are required');
+    }
+
     const battle = await prisma.battle.findUnique({
       where: { code: code.toUpperCase() },
-      include: { players: true },
+      include: { players: true, problem: true },
     });
 
     if (!battle) throw new AppError(404, 'Battle not found');
@@ -365,28 +371,46 @@ router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) =
       },
     });
 
-    // Simulate judge asynchronously
-    setTimeout(async () => {
+    // Run judge asynchronously
+    (async () => {
       try {
-        const accepted = Math.random() > 0.35; // 65% accept rate for demo
+        // Ensure problem test cases are generated
+        await ensureProblemGenerated(battle.problemId!);
+
+        const allCases = await getAllTestCases(battle.problemId!);
+        const problem = await prisma.problem.findUnique({ where: { id: battle.problemId! } });
+
+        const result = await judgeCode(
+          submittedCode,
+          language,
+          allCases.map(tc => ({ input: tc.input, expectedOutput: tc.expectedOutput })),
+          problem?.timeLimit || 5000,
+          problem?.memoryLimit || 256
+        );
+
+        const isAccepted = result.status === 'accepted';
         const updatedSubmission = await prisma.submission.update({
           where: { id: submission.id },
           data: {
-            status: accepted ? 'accepted' : 'wrong_answer',
-            runtime: accepted ? Math.floor(Math.random() * 200) + 30 : null,
-            memory: accepted ? Math.floor(Math.random() * 40) + 8 : null,
-            score: accepted ? 100 : 0,
+            status: result.status === 'accepted' ? 'accepted' :
+                    result.status === 'compilation_error' ? 'compilation_error' :
+                    result.status === 'time_limit' ? 'time_limit' :
+                    result.status === 'runtime_error' ? 'runtime_error' :
+                    result.status === 'memory_limit' ? 'runtime_error' :
+                    'wrong_answer',
+            runtime: result.totalRuntime,
+            memory: result.peakMemory,
+            score: isAccepted ? 100 : 0,
           },
         });
 
-        if (accepted) {
+        if (isAccepted) {
           await prisma.battlePlayer.update({
             where: { id: player.id },
             data: { score: { increment: 100 }, problemsSolved: { increment: 1 } },
           });
         }
 
-        // Get updated player list for the leaderboard
         const updatedPlayers = await prisma.battlePlayer.findMany({
           where: { battleId: battle.id },
           include: {
@@ -404,10 +428,17 @@ router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) =
             players: updatedPlayers,
           });
         }
-      } catch (e) {
-        console.error('Judge simulation error:', e);
+      } catch (e: any) {
+        console.error('Judge error:', e.message);
+        // Update submission as runtime error
+        try {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: { status: 'runtime_error', score: 0 },
+          });
+        } catch {}
       }
-    }, 2500);
+    })();
 
     res.json({ success: true, data: { submissionId: submission.id, status: 'pending' } });
   } catch (error) {
@@ -415,11 +446,15 @@ router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) =
   }
 });
 
-// POST run code (sandbox simulation)
+// POST run code - REAL JUDGE
 router.post('/:code/run', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const { code: battleCode } = req.params;
     const { language, code: submittedCode } = req.body;
+
+    if (!submittedCode || !language) {
+      throw new AppError(400, 'Code and language are required');
+    }
 
     const battle = await prisma.battle.findUnique({
       where: { code: battleCode.toUpperCase() },
@@ -429,27 +464,42 @@ router.post('/:code/run', authenticate, async (req: AuthRequest, res, next) => {
     if (!battle) throw new AppError(404, 'Battle not found');
     if (!battle.problem) throw new AppError(400, 'No problem assigned to this battle');
 
-    // Wait 1.5s to simulate run
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Ensure test cases are generated
+    await ensureProblemGenerated(battle.problem.id);
 
-    const examples = (battle.problem!.examples || []) as any[];
-    const testCases = examples.map((ex, index) => {
-      const passed = Math.random() > 0.2; // 80% pass rate for Run
-      return {
-        id: index + 1,
-        input: ex.input,
-        expected: ex.output,
-        actual: passed ? ex.output : (language === 'python' ? 'None' : 'undefined'),
-        passed,
-        explanation: ex.explanation || '',
-      };
-    });
+    // Get visible test cases (first 3 for Run mode)
+    const visibleCases = await getVisibleTestCases(battle.problem.id);
+    const runCases = visibleCases.slice(0, 3);
+
+    if (runCases.length === 0) {
+      throw new AppError(400, 'No test cases available');
+    }
+
+    const result = await judgeCode(
+      submittedCode,
+      language,
+      runCases.map(tc => ({ input: tc.input, expectedOutput: tc.expectedOutput })),
+      battle.problem.timeLimit,
+      battle.problem.memoryLimit
+    );
+
+    const testResults = result.testResults.map((tr, index) => ({
+      id: index + 1,
+      input: tr.input,
+      expected: tr.expectedOutput,
+      actual: tr.actualOutput,
+      passed: tr.status === 'accepted',
+      status: tr.status,
+      runtime: tr.runtime,
+      explanation: '',
+    }));
 
     res.json({
       success: true,
       data: {
-        status: testCases.every((t) => t.passed) ? 'accepted' : 'wrong_answer',
-        testCases,
+        status: result.status,
+        testCases: testResults,
+        compilationOutput: result.compilationOutput,
       },
     });
   } catch (error) {

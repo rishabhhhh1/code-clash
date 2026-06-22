@@ -30,13 +30,69 @@ interface Problem {
   starterCodeJava?: string | null;
   starterCodePython?: string | null;
   starterCodeJavaScript?: string | null;
+  generationStatus?: string;
+  totalTestCases?: number;
+}
+
+interface TestResult {
+  id: number;
+  input: string;
+  expected: string;
+  actual: string;
+  passed: boolean;
+  status: string;
+  runtime?: number;
+  explanation?: string;
+}
+
+interface RunResult {
+  status: string;
+  testCases: TestResult[];
+  compilationOutput?: string;
+}
+
+interface SubmitResult {
+  submissionId?: string;
+  status: string;
+  runtime?: number;
+  memory?: number;
+  testCasesPassed?: number;
+  totalTestCases?: number;
+  runtimePercentile?: number;
+  compilationOutput?: string;
 }
 
 const CODE_TEMPLATES: Record<string, string> = {
-  python: `def solve(nums, target):\n    # Write your Python solution here\n    pass\n`,
-  javascript: `function solve(nums, target) {\n    // Write your JavaScript solution here\n    \n}\n`,
-  java: `class Solution {\n    public void solve(int[] nums, int target) {\n        // Write your Java solution here\n        \n    }\n}\n`,
-  cpp: `class Solution {\npublic:\n    void solve(vector<int>& nums, int target) {\n        // Write your C++ solution here\n        \n    }\n};\n`,
+  python: `class Solution:
+    def solve(self, nums, target):
+        # Write your Python solution here
+        pass
+`,
+  javascript: `/**
+ * @param {number[]} nums
+ * @param {number} target
+ * @return {number[]}
+ */
+var solve = function(nums, target) {
+    // Write your JavaScript solution here
+    
+};
+`,
+  java: `class Solution {
+    public int[] solve(int[] nums, int target) {
+        // Write your Java solution here
+        
+    }
+}
+`,
+  cpp: `class Solution {
+public:
+    vector<int> solve(vector<int>& nums, int target) {
+        // Write your C++ solution here
+        
+    }
+};
+`,
 };
 
 function getStarterCode(problem: Problem | null | undefined, lang: string): string {
@@ -50,6 +106,16 @@ function getStarterCode(problem: Problem | null | undefined, lang: string): stri
   return langMap[lang] || CODE_TEMPLATES[lang] || CODE_TEMPLATES.python;
 }
 
+const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  accepted: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-green-500/20', label: 'Accepted' },
+  wrong_answer: { bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20', label: 'Wrong Answer' },
+  time_limit: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', border: 'border-yellow-500/20', label: 'Time Limit Exceeded' },
+  runtime_error: { bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20', label: 'Runtime Error' },
+  compilation_error: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/20', label: 'Compilation Error' },
+  memory_limit: { bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20', label: 'Memory Limit Exceeded' },
+  pending: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20', label: 'Pending' },
+};
+
 export default function ProblemPracticePage() {
   const params = useParams();
   const router = useRouter();
@@ -62,8 +128,8 @@ export default function ProblemPracticePage() {
   const [isSubmitRunning, setIsSubmitRunning] = useState(false);
   const [isRunRunning, setIsRunRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<'testcase' | 'result'>('testcase');
-  const [runResult, setRunResult] = useState<any>(null);
-  const [submitResult, setSubmitResult] = useState<any>(null);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
 
   useEffect(() => {
     fetchProblem();
@@ -94,12 +160,6 @@ export default function ProblemPracticePage() {
   };
 
   const handleRunCode = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setRunResult({ error: 'Please log in to run code' });
-      return;
-    }
-
     setIsRunRunning(true);
     setRunResult(null);
     setSubmitResult(null);
@@ -110,10 +170,7 @@ export default function ProblemPracticePage() {
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/problems/${slug}/run`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ language, code }),
         }
       );
@@ -121,22 +178,16 @@ export default function ProblemPracticePage() {
       if (data.success) {
         setRunResult(data.data);
       } else {
-        setRunResult({ error: data.error || 'Failed to run code' });
+        setRunResult({ status: 'runtime_error', testCases: [], compilationOutput: data.error });
       }
     } catch (e) {
-      setRunResult({ error: 'Network error occurred while running code' });
+      setRunResult({ status: 'runtime_error', testCases: [], compilationOutput: 'Network error occurred while running code' });
     } finally {
       setIsRunRunning(false);
     }
   };
 
   const handleSubmitCode = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setSubmitResult({ error: 'Please log in to submit code' });
-      return;
-    }
-
     setIsSubmitRunning(true);
     setSubmitResult(null);
     setRunResult(null);
@@ -147,10 +198,7 @@ export default function ProblemPracticePage() {
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/problems/${slug}/submit`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ language, code }),
         }
       );
@@ -158,11 +206,11 @@ export default function ProblemPracticePage() {
       if (data.success) {
         setSubmitResult(data.data);
       } else {
-        setSubmitResult({ error: data.error || 'Failed to submit code' });
+        setSubmitResult({ status: 'runtime_error', compilationOutput: data.error });
         setIsSubmitRunning(false);
       }
     } catch (e) {
-      setSubmitResult({ error: 'Network error occurred while submitting' });
+      setSubmitResult({ status: 'runtime_error', compilationOutput: 'Network error occurred while submitting' });
       setIsSubmitRunning(false);
     } finally {
       setIsSubmitRunning(false);
@@ -199,6 +247,8 @@ export default function ProblemPracticePage() {
     );
   }
 
+  const statusStyle = submitResult ? STATUS_STYLES[submitResult.status] : runResult ? STATUS_STYLES[runResult.status] : null;
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
       {/* Header bar */}
@@ -225,6 +275,11 @@ export default function ProblemPracticePage() {
           >
             {problem.difficulty}
           </span>
+          {problem.totalTestCases !== undefined && problem.totalTestCases > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              {problem.totalTestCases} test cases
+            </span>
+          )}
         </div>
         <div className="text-xs text-muted-foreground">Single Player Practice Mode</div>
       </div>
@@ -310,39 +365,12 @@ export default function ProblemPracticePage() {
                 smoothScrolling: true,
                 cursorBlinking: 'smooth',
                 cursorSmoothCaretAnimation: 'on',
-                suggest: {
-                  showMethods: true,
-                  showFunctions: true,
-                  showConstructors: true,
-                  showFields: true,
-                  showVariables: true,
-                  showClasses: true,
-                  showStructs: true,
-                  showInterfaces: true,
-                  showModules: true,
-                  showProperties: true,
-                  showEvents: true,
-                  showOperators: true,
-                  showUnits: true,
-                  showValues: true,
-                  showConstants: true,
-                  showEnums: true,
-                  showEnumMembers: true,
-                  showKeywords: true,
-                  showWords: true,
-                  showColors: true,
-                  showFiles: true,
-                  showReferences: true,
-                  showFolders: true,
-                  showTypeParameters: true,
-                  showSnippets: true,
-                },
               }}
             />
           </div>
 
           {/* Testcases / Output Tabs */}
-          <div className="h-64 flex flex-col bg-muted/40 overflow-hidden">
+          <div className="h-80 flex flex-col bg-muted/40 overflow-hidden">
             <div className="border-b px-4 flex bg-muted/80">
               <button
                 onClick={() => setActiveTab('testcase')}
@@ -356,23 +384,26 @@ export default function ProblemPracticePage() {
               </button>
               <button
                 onClick={() => setActiveTab('result')}
-                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all ${
+                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all relative ${
                   activeTab === 'result'
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Result Console
+                {(isRunRunning || isSubmitRunning) && (
+                  <span className="ml-2 inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                )}
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 font-mono text-xs">
               {activeTab === 'testcase' && (
                 <div className="space-y-4">
-                  {problem.examples.slice(0, 2).map((ex, index) => (
+                  {problem.examples.slice(0, 3).map((ex, index) => (
                     <div key={index} className="space-y-1">
                       <div className="text-xs font-semibold text-muted-foreground">Test Case {index + 1} Input</div>
-                      <pre className="p-2 border rounded bg-card text-foreground">{ex.input}</pre>
+                      <pre className="p-2 border rounded bg-card text-foreground break-all whitespace-pre-wrap">{ex.input}</pre>
                     </div>
                   ))}
                 </div>
@@ -383,64 +414,72 @@ export default function ProblemPracticePage() {
                   {isRunRunning && (
                     <div className="text-muted-foreground italic flex items-center gap-2">
                       <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                      Running code stubs against test suite...
+                      Running code against test cases...
                     </div>
                   )}
 
                   {isSubmitRunning && (
                     <div className="text-muted-foreground italic flex items-center gap-2">
                       <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                      Submitting solution to remote judge...
+                      Submitting solution to judge...
                     </div>
                   )}
 
+                  {/* Run Results */}
                   {!isRunRunning && !isSubmitRunning && runResult && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-muted-foreground">Status:</span>
-                        <span
-                          className={`px-2 py-0.5 text-xs font-bold rounded uppercase ${
-                            runResult.status === 'accepted'
-                              ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                              : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                          }`}
-                        >
-                          {runResult.status === 'accepted' ? 'Passed' : 'Failed'}
-                        </span>
+                        {statusStyle && (
+                          <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                            {statusStyle.label}
+                          </span>
+                        )}
                       </div>
 
+                      {runResult.compilationOutput && (
+                        <div className="p-3 border rounded-lg bg-red-500/5 border-red-500/20">
+                          <div className="text-xs font-semibold text-red-500 mb-1">Compilation/Runtime Error:</div>
+                          <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all">{runResult.compilationOutput}</pre>
+                        </div>
+                      )}
+
                       <div className="space-y-3.5">
-                        {runResult.testCases?.map((tc: any) => (
+                        {runResult.testCases?.map((tc: TestResult) => (
                           <div key={tc.id} className="p-3 border rounded-lg bg-card space-y-1.5">
                             <div className="flex justify-between items-center">
                               <span className="font-semibold text-xs text-muted-foreground">Test Case #{tc.id}</span>
-                              <span
-                                className={`text-[10px] font-bold rounded px-1.5 ${
-                                  tc.passed
-                                    ? 'bg-green-500/10 text-green-500'
-                                    : 'bg-red-500/10 text-red-500'
-                                }`}
-                              >
-                                {tc.passed ? 'PASSED' : 'FAILED'}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                {tc.runtime !== undefined && (
+                                  <span className="text-[10px] text-muted-foreground">{tc.runtime}ms</span>
+                                )}
+                                <span
+                                  className={`text-[10px] font-bold rounded px-1.5 ${
+                                    tc.passed
+                                      ? 'bg-green-500/10 text-green-500'
+                                      : 'bg-red-500/10 text-red-500'
+                                  }`}
+                                >
+                                  {tc.passed ? 'PASSED' : tc.status === 'time_limit' ? 'TLE' : tc.status === 'runtime_error' ? 'RE' : 'FAILED'}
+                                </span>
+                              </div>
                             </div>
                             <div className="grid grid-cols-3 gap-2 text-[10px] border-t border-muted/50 pt-1.5 mt-1.5">
                               <div>
                                 <div className="text-muted-foreground font-sans">Input</div>
-                                <div className="truncate font-semibold mt-0.5">{tc.input}</div>
+                                <div className="truncate font-semibold mt-0.5" title={tc.input}>{tc.input}</div>
                               </div>
                               <div>
                                 <div className="text-muted-foreground font-sans">Expected</div>
-                                <div className="truncate font-semibold mt-0.5">{tc.expected}</div>
+                                <div className="truncate font-semibold mt-0.5" title={tc.expected}>{tc.expected}</div>
                               </div>
                               <div>
                                 <div className="text-muted-foreground font-sans">Actual</div>
                                 <div
-                                  className={`truncate font-semibold mt-0.5 ${
-                                    tc.passed ? 'text-green-500' : 'text-red-500'
-                                  }`}
+                                  className={`truncate font-semibold mt-0.5 ${tc.passed ? 'text-green-500' : 'text-red-500'}`}
+                                  title={tc.actual}
                                 >
-                                  {tc.actual}
+                                  {tc.actual || '(empty)'}
                                 </div>
                               </div>
                             </div>
@@ -450,20 +489,24 @@ export default function ProblemPracticePage() {
                     </div>
                   )}
 
+                  {/* Submit Results */}
                   {!isRunRunning && !isSubmitRunning && submitResult && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-muted-foreground">Submission State:</span>
-                        <span
-                          className={`px-2 py-0.5 text-xs font-bold rounded uppercase ${
-                            submitResult.status === 'accepted'
-                              ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                              : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                          }`}
-                        >
-                          {submitResult.status}
-                        </span>
+                        <span className="text-xs font-semibold text-muted-foreground">Verdict:</span>
+                        {statusStyle && (
+                          <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                            {statusStyle.label}
+                          </span>
+                        )}
                       </div>
+
+                      {submitResult.compilationOutput && (
+                        <div className="p-3 border rounded-lg bg-red-500/5 border-red-500/20">
+                          <div className="text-xs font-semibold text-red-500 mb-1">Error:</div>
+                          <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all">{submitResult.compilationOutput}</pre>
+                        </div>
+                      )}
 
                       <div className="p-4 border rounded-xl bg-card grid grid-cols-2 gap-4">
                         <div className="p-2.5 border rounded-lg bg-muted/20">
@@ -475,10 +518,33 @@ export default function ProblemPracticePage() {
                         <div className="p-2.5 border rounded-lg bg-muted/20">
                           <div className="text-[10px] text-muted-foreground font-sans">Memory</div>
                           <div className="text-base font-bold text-foreground mt-0.5">
-                            {submitResult.memory ? `${submitResult.memory} MB` : 'N/A'}
+                            {submitResult.memory ? `${submitResult.memory} KB` : 'N/A'}
                           </div>
                         </div>
                       </div>
+
+                      {submitResult.testCasesPassed !== undefined && submitResult.totalTestCases !== undefined && (
+                        <div className="p-3 border rounded-lg bg-card">
+                          <div className="text-xs font-semibold text-muted-foreground mb-1">Test Cases:</div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${submitResult.testCasesPassed === submitResult.totalTestCases ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                style={{ width: `${(submitResult.testCasesPassed / submitResult.totalTestCases) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-bold">
+                              {submitResult.testCasesPassed}/{submitResult.totalTestCases}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {submitResult.runtimePercentile && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          Faster than {submitResult.runtimePercentile}% of submissions
+                        </div>
+                      )}
                     </div>
                   )}
 

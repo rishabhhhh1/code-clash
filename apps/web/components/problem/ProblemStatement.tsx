@@ -79,33 +79,60 @@ function CollapsibleSection({
   );
 }
 
-export default function ProblemStatement({ problem }: { problem: ProblemData }) {
+export default function ProblemStatement({
+  problem,
+  onSynced,
+}: {
+  problem: ProblemData;
+  onSynced?: (updated: ProblemData) => void;
+}) {
   const diff = DIFFICULTY_STYLES[problem.difficulty] || DIFFICULTY_STYLES.medium;
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Parse description to extract sections if the description contains them
+  const needsSync =
+    !problem.description ||
+    problem.description.includes('imported from LeetCode') ||
+    problem.description.length < 50;
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/problems/${problem.id}/sync`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        setSyncError(data.error || 'Sync failed');
+      }
+    } catch (e: any) {
+      setSyncError(e.message || 'Network error during sync');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   let mainDescription = problem.description || '';
   let extractedInputFormat = problem.inputFormat || '';
   let extractedOutputFormat = problem.outputFormat || '';
   const extractedConstraints: string[] = [...(problem.constraints || [])];
 
-  // If description contains section markers, extract them
-  if (mainDescription) {
+  if (mainDescription && !needsSync) {
     const inputMatch = mainDescription.match(/\*\*Input Format[:\*]*\*\*\s*([\s\S]*?)(?=\*\*Output Format|\*\*Constraints?\*\*|\*\*Example|\n---|\n##\s|$)/i);
     const outputMatch = mainDescription.match(/\*\*Output Format[:\*]*\*\*\s*([\s\S]*?)(?=\*\*Constraints?\*\*|\*\*Example|\n---|\n##\s|$)/i);
     const constraintMatch = mainDescription.match(/\*\*Constraints?[:\*]*\*\*\s*([\s\S]*?)(?=\*\*Example|\n---|\n##\s|$)/i);
 
-    if (inputMatch && !extractedInputFormat) {
-      extractedInputFormat = inputMatch[1].trim();
-    }
-    if (outputMatch && !extractedOutputFormat) {
-      extractedOutputFormat = outputMatch[1].trim();
-    }
+    if (inputMatch && !extractedInputFormat) extractedInputFormat = inputMatch[1].trim();
+    if (outputMatch && !extractedOutputFormat) extractedOutputFormat = outputMatch[1].trim();
     if (constraintMatch && extractedConstraints.length === 0) {
       const lines = constraintMatch[1].split('\n').map((l) => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
       extractedConstraints.push(...lines);
     }
 
-    // Remove extracted sections from main description
     if (inputMatch || outputMatch || constraintMatch) {
       mainDescription = mainDescription
         .replace(/\*\*Input Format[:\*]*\*\*\s*[\s\S]*?(?=\*\*Output Format|\*\*Constraints?\*\*|\*\*Example|\n---|\n##\s|$)/i, '')
@@ -115,37 +142,88 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
     }
   }
 
+  if (needsSync) {
+    return (
+      <div className="h-full overflow-y-auto p-5">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold tracking-tight">{problem.title}</h1>
+            <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${diff.bg} ${diff.text} ${diff.border}`}>
+              {problem.difficulty}
+            </span>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {problem.topics.map((topic) => (
+              <span key={topic} className="px-2.5 py-1 bg-secondary text-secondary-foreground text-xs font-medium rounded-md">
+                {topic.replace(/-/g, ' ')}
+              </span>
+            ))}
+          </div>
+
+          <div className="p-4 border border-yellow-500/20 bg-yellow-500/5 rounded-lg">
+            <div className="flex items-center gap-2 text-yellow-500 text-sm font-medium mb-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              Problem content not yet loaded
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Full problem details (description, examples, test cases, starter code) have not been fetched from LeetCode yet.
+            </p>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center gap-2"
+            >
+              {syncing && (
+                <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              )}
+              {syncing ? 'Syncing from LeetCode...' : 'Sync from LeetCode'}
+            </button>
+            {syncError && (
+              <p className="mt-2 text-xs text-red-500">{syncError}</p>
+            )}
+            {problem.problemLink && (
+              <a
+                href={problem.problemLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-3 text-xs text-primary hover:underline"
+              >
+                View on LeetCode
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-5 space-y-5">
-        {/* Problem Header */}
         <div className="space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold tracking-tight">{problem.title}</h1>
-            <span
-              className={`px-2.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${diff.bg} ${diff.text} ${diff.border}`}
-            >
+            <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${diff.bg} ${diff.text} ${diff.border}`}>
               {problem.difficulty}
             </span>
             {problem.acceptanceRate != null && (
-              <span className="text-xs text-muted-foreground">
-                Acceptance: {problem.acceptanceRate}%
-              </span>
+              <span className="text-xs text-muted-foreground">Acceptance: {problem.acceptanceRate}%</span>
             )}
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {problem.topics.map((topic) => (
-              <span
-                key={topic}
-                className="px-2.5 py-1 bg-secondary text-secondary-foreground text-xs font-medium rounded-md"
-              >
+              <span key={topic} className="px-2.5 py-1 bg-secondary text-secondary-foreground text-xs font-medium rounded-md">
                 {topic.replace(/-/g, ' ')}
               </span>
             ))}
           </div>
         </div>
 
-        {/* Main Description (Markdown) */}
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -190,9 +268,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
               strong({ children }) {
                 return <strong className="font-semibold text-foreground">{children}</strong>;
               },
-              h1({ children }) {
-                return <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>;
-              },
               h2({ children }) {
                 return <h2 className="text-base font-bold mt-4 mb-2">{children}</h2>;
               },
@@ -225,43 +300,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </ReactMarkdown>
         </div>
 
-        {/* Fallback message if description is stub */}
-        {mainDescription.includes('imported from LeetCode') && (
-          <div className="p-4 border border-yellow-500/20 bg-yellow-500/5 rounded-lg">
-            <div className="flex items-center gap-2 text-yellow-500 text-sm font-medium mb-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-              Problem content not yet loaded
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Full problem details have not been fetched yet. Click{' '}
-              <button className="underline text-primary hover:text-primary/80" onClick={() => {
-                // This will be handled by the parent component
-                const event = new CustomEvent('sync-problem', { detail: { id: problem.id } });
-                window.dispatchEvent(event);
-              }}>
-                Sync from LeetCode
-              </button>{' '}
-              to load the complete problem statement.
-            </p>
-            {problem.problemLink && (
-              <a
-                href={problem.problemLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline"
-              >
-                View on LeetCode
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* Input Format */}
         {extractedInputFormat && (
           <div className="space-y-2">
             <h3 className="font-semibold text-sm">Input Format</h3>
@@ -271,7 +309,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </div>
         )}
 
-        {/* Output Format */}
         {extractedOutputFormat && (
           <div className="space-y-2">
             <h3 className="font-semibold text-sm">Output Format</h3>
@@ -281,7 +318,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </div>
         )}
 
-        {/* Examples */}
         {problem.examples && problem.examples.length > 0 && (
           <CollapsibleSection title="Examples" defaultOpen={true} count={problem.examples.length}>
             <div className="space-y-4 pt-3">
@@ -312,7 +348,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </CollapsibleSection>
         )}
 
-        {/* Constraints */}
         {extractedConstraints.length > 0 && (
           <CollapsibleSection title="Constraints" defaultOpen={true} count={extractedConstraints.length}>
             <ul className="space-y-1.5 pt-3">
@@ -326,7 +361,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </CollapsibleSection>
         )}
 
-        {/* Hints */}
         {problem.hints && problem.hints.length > 0 && (
           <CollapsibleSection title="Hints" defaultOpen={false} count={problem.hints.length}>
             <ul className="space-y-2 pt-3">
@@ -340,7 +374,6 @@ export default function ProblemStatement({ problem }: { problem: ProblemData }) 
           </CollapsibleSection>
         )}
 
-        {/* Limits & Link */}
         <div className="flex items-center gap-4 pt-2 border-t text-xs text-muted-foreground">
           <span>Time: {problem.timeLimit / 1000}s</span>
           <span>Memory: {problem.memoryLimit}MB</span>

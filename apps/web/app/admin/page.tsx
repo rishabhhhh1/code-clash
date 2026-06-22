@@ -26,6 +26,8 @@ interface Problem {
   acceptanceRate: number | null;
   leetcodeId: number | null;
   category: string | null;
+  generationStatus: string;
+  description: string;
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -37,7 +39,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'dashboard' | 'problems' | 'users'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'problems' | 'sync' | 'users'>('dashboard');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [problemsPage, setProblemsPage] = useState(1);
@@ -47,6 +49,10 @@ export default function AdminPage() {
   const [activeFilter, setActiveFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, message: '' });
+  const [missingContent, setMissingContent] = useState<Problem[]>([]);
+  const [missingCount, setMissingCount] = useState(0);
 
   useEffect(() => {
     fetchStats();
@@ -55,6 +61,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === 'problems') fetchProblems();
   }, [tab, problemsPage, search, diffFilter, activeFilter]);
+
+  useEffect(() => {
+    if (tab === 'sync') fetchMissingContent();
+  }, [tab]);
 
   async function fetchStats() {
     try {
@@ -104,6 +114,72 @@ export default function AdminPage() {
     }
   }
 
+  async function fetchMissingContent() {
+    try {
+      const res = await fetch(`${API}/api/admin/problems/missing-content`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setMissingContent(data.data.items);
+        setMissingCount(data.data.total);
+      }
+    } catch {
+      setError('Failed to fetch missing content problems');
+    }
+  }
+
+  async function syncSingleProblem(id: string) {
+    try {
+      setSyncing(true);
+      setSyncProgress({ current: 0, total: 1, message: 'Syncing problem...' });
+      const res = await fetch(`${API}/api/admin/problems/${id}/sync-leetcode`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncProgress({ current: 1, total: 1, message: 'Synced successfully!' });
+        fetchProblems();
+        fetchMissingContent();
+      } else {
+        setError(data.error || 'Sync failed');
+      }
+    } catch {
+      setError('Failed to sync problem');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function syncBatchProblems(limit: number = 20, difficulty?: string) {
+    try {
+      setSyncing(true);
+      setSyncProgress({ current: 0, total: limit, message: 'Starting batch sync...' });
+      
+      const res = await fetch(`${API}/api/admin/problems/sync-leetcode-batch`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit, difficulty }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncProgress({ 
+          current: data.data.synced, 
+          total: data.data.total, 
+          message: `Synced ${data.data.synced}/${data.data.total} problems` 
+        });
+        fetchProblems();
+        fetchMissingContent();
+      } else {
+        setError(data.error || 'Batch sync failed');
+      }
+    } catch {
+      setError('Failed to batch sync');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (loading && !stats) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -126,7 +202,7 @@ export default function AdminPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b mb-6">
-        {(['dashboard', 'problems', 'users'] as const).map((t) => (
+        {(['dashboard', 'problems', 'sync', 'users'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -242,6 +318,7 @@ export default function AdminPage() {
                   <th className="text-left px-4 py-2">Topics</th>
                   <th className="text-left px-4 py-2">Accept%</th>
                   <th className="text-left px-4 py-2">Status</th>
+                  <th className="text-left px-4 py-2">Content</th>
                   <th className="text-left px-4 py-2">Premium</th>
                   <th className="text-left px-4 py-2">Actions</th>
                 </tr>
@@ -264,6 +341,13 @@ export default function AdminPage() {
                       <span className={`px-2 py-0.5 rounded text-xs ${p.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                         {p.isActive ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {p.description && p.description.length > 50 && !p.description.includes('imported from LeetCode') ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">Complete</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">Missing</span>
+                      )}
                     </td>
                     <td className="px-4 py-2">
                       <span className={`px-2 py-0.5 rounded text-xs ${p.isPremium ? 'bg-yellow-500/20 text-yellow-400' : 'bg-muted text-muted-foreground'}`}>
@@ -289,7 +373,7 @@ export default function AdminPage() {
                   </tr>
                 ))}
                 {problems.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No problems found</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No problems found</td></tr>
                 )}
               </tbody>
             </table>
@@ -314,6 +398,130 @@ export default function AdminPage() {
             >
               Next
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sync Tab */}
+      {tab === 'sync' && (
+        <div className="space-y-6">
+          <div className="border rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">LeetCode Content Sync</h2>
+            <p className="text-muted-foreground mb-4">
+              Sync problem content (description, examples, constraints, starter code) from LeetCode for problems that were imported from CSV.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <StatCard label="Problems Missing Content" value={missingCount} />
+              <StatCard label="Total Problems" value={stats?.problems || 0} />
+              <StatCard label="Sync Progress" value={syncing ? `${syncProgress.current}/${syncProgress.total}` : '-'} />
+            </div>
+
+            {syncing && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-blue-500 font-medium">{syncProgress.message}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3 mb-6">
+              <button
+                onClick={() => fetchMissingContent()}
+                disabled={syncing}
+                className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                Refresh Missing Count
+              </button>
+              <button
+                onClick={() => syncBatchProblems(10)}
+                disabled={syncing || missingCount === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+              >
+                Sync 10 Problems
+              </button>
+              <button
+                onClick={() => syncBatchProblems(20)}
+                disabled={syncing || missingCount === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+              >
+                Sync 20 Problems
+              </button>
+              <button
+                onClick={() => syncBatchProblems(50)}
+                disabled={syncing || missingCount === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+              >
+                Sync 50 Problems
+              </button>
+              <button
+                onClick={() => syncBatchProblems(100)}
+                disabled={syncing || missingCount === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+              >
+                Sync 100 Problems
+              </button>
+            </div>
+
+            <div className="flex gap-3 mb-6">
+              <select
+                onChange={(e) => syncBatchProblems(20, e.target.value || undefined)}
+                disabled={syncing}
+                className="px-3 py-2 border rounded bg-background text-sm"
+              >
+                <option value="">Sync by Difficulty (All)</option>
+                <option value="easy">Easy Only</option>
+                <option value="medium">Medium Only</option>
+                <option value="hard">Hard Only</option>
+              </select>
+            </div>
+
+            {missingContent.length > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted/50 px-4 py-2 text-sm font-semibold">
+                  First {Math.min(20, missingContent.length)} Problems Missing Content
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-t">
+                      <th className="text-left px-4 py-2">ID</th>
+                      <th className="text-left px-4 py-2">Title</th>
+                      <th className="text-left px-4 py-2">Difficulty</th>
+                      <th className="text-left px-4 py-2">Status</th>
+                      <th className="text-left px-4 py-2">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingContent.slice(0, 20).map((p) => (
+                      <tr key={p.id} className="border-t hover:bg-muted/30">
+                        <td className="px-4 py-2 text-muted-foreground">{p.leetcodeId || '-'}</td>
+                        <td className="px-4 py-2">
+                          <a href={`/problems/${p.slug}`} className="hover:text-primary">{p.title}</a>
+                        </td>
+                        <td className={`px-4 py-2 font-medium ${DIFFICULTY_COLORS[p.difficulty] || ''}`}>
+                          {p.difficulty}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
+                            Missing Content
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={() => syncSingleProblem(p.id)}
+                            disabled={syncing}
+                            className="px-2 py-1 text-xs border rounded hover:bg-muted disabled:opacity-50"
+                          >
+                            Sync
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
