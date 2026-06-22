@@ -190,7 +190,6 @@ const TOPIC_MAP: Record<string, string> = {
   'rejection-sampling': 'rejection-sampling',
   'suffix array': 'suffix-array',
   'suffix-array': 'suffix-array',
-  'counting sort': 'counting-sort',
   'biconnected component': 'biconnected-component',
   'biconnected-component': 'biconnected-component',
   'eulerian circuit': 'eulerian-circuit',
@@ -205,22 +204,13 @@ const TOPIC_MAP: Record<string, string> = {
   'memoize': 'memoization',
   'properties': 'properties',
   'number theory': 'number-theory',
-  'number-theory': 'number-theory',
   'pole': 'polar',
   'polar': 'polar',
-  'randomized': 'randomized',
   'game': 'game-theory',
   'minimax': 'minimax',
-  'minimax': 'minimax',
   'aho-corasick': 'string-matching',
-  'rolling hash': 'rolling-hash',
   'suffix tree': 'suffix-tree',
-  'suffix-tree': 'suffix-tree',
-  'data structure': 'data-structures',
-  'data-structures': 'data-structures',
   'heap (priority queue)': 'priority-queue',
-  'stack': 'stack',
-  'queue': 'queue',
 };
 
 function normalizeTopics(raw: string): string[] {
@@ -348,7 +338,7 @@ async function importProblems() {
 
   // Batch insert for performance
   const BATCH_SIZE = 100;
-  const batches: any[][] = [];
+  const batches: any[] = [];
 
   for (const row of rows) {
     try {
@@ -365,15 +355,15 @@ async function importProblems() {
 
       if (existing) { skipped++; continue; }
 
-      const difficulty = normalizeDifficulty(row[colDifficulty] || 'medium');
-      const topics = normalizeTopics(row[colTopics] || '');
-      const acceptanceRate = colAcceptance ? parseFloat(row[colAcceptance]) : null;
-      const isPremium = colPremium ? (row[colPremium].toLowerCase() === 'true' || row[colPremium] === '1') : false;
-      const category = colCategory ? row[colCategory]?.trim() || null : null;
-      const likes = colLikes ? parseInt(row[colLikes], 10) || null : null;
-      const dislikes = colDislikes ? parseInt(row[colDislikes], 10) || null : null;
-      const link = colLink ? row[colLink]?.trim() || null : null;
-      const exampleCases = colExamples ? parseExampleTestCases(row[colExamples]) : [];
+      const difficulty = normalizeDifficulty(row[colDifficulty || ''] || 'medium');
+      const topics = normalizeTopics(row[colTopics || ''] || '');
+      const acceptanceRate = colAcceptance ? parseFloat(row[colAcceptance] || '') : null;
+      const isPremium = colPremium ? ((row[colPremium] || '').toLowerCase() === 'true' || row[colPremium] === '1') : false;
+      const category = colCategory ? (row[colCategory || ''] || '').trim() || null : null;
+      const likes = colLikes ? parseInt(row[colLikes || ''], 10) || null : null;
+      const dislikes = colDislikes ? parseInt(row[colDislikes || ''], 10) || null : null;
+      const link = colLink ? (row[colLink || ''] || '').trim() || null : null;
+      const exampleCases = colExamples ? parseExampleTestCases(row[colExamples || '']) : [];
 
       // Build description
       const description = buildDescription(row, difficulty);

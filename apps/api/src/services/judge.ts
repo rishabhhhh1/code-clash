@@ -66,40 +66,133 @@ const LANG_CONFIG: Record<string, LangConfig> = {
 function isDockerAvailable(): boolean {
   try {
     execSync('docker info', { stdio: 'pipe', timeout: 5000 });
+    // Also check if the judge image exists
+    const image = config.judgeDockerImage || 'codeclash-judge:latest';
+    execSync(`docker image inspect ${image}`, { stdio: 'pipe', timeout: 5000 });
     return true;
   } catch {
     return false;
   }
 }
 
-function wrapUserCode(code: string, language: string, input: string): string {
-  // Wrap user code to read from stdin and write to stdout
-  // The user's Solution class/function is already in the code
-  // We just need to add the I/O wrapper
+function wrapUserCode(code: string, language: string, _input: string): string {
+  // Wrap user code with I/O so LeetCode-style Solution class works
+  // The user defines class Solution { method(...) {...} }
+  // Our wrapper reads stdin, instantiates Solution, calls the method, prints output
+
   switch (language) {
+    case 'python':
+      return `${code}
+
+# --- Judge I/O Wrapper (auto-generated) ---
+import sys as __sys, json as __json
+
+def __judge_wrapper():
+    raw = __sys.stdin.read().strip()
+    if not raw:
+        return
+    lines = [l.strip() for l in raw.split('\\n') if l.strip()]
+    args = []
+    for line in lines:
+        try:
+            args.append(__json.loads(line))
+        except Exception:
+            args.append(line)
+
+    try:
+        sol = Solution()
+    except Exception as e:
+        print(f"Error creating Solution: {e}", file=__sys.stderr)
+        return
+
+    # Find first public method (skip _dunder methods)
+    methods = [m for m in dir(sol) if not m.startswith('_') and callable(getattr(sol, m))]
+    if not methods:
+        print("No callable method found on Solution", file=__sys.stderr)
+        return
+
+    try:
+        result = getattr(sol, methods[0])(*args)
+        print(__json.dumps(result))
+    except Exception as e:
+        print(f"Error: {e}", file=__sys.stderr)
+
+if __name__ == '__main__':
+    __judge_wrapper()
+`;
+
+    case 'javascript':
+      return `${code}
+
+// --- Judge I/O Wrapper (auto-generated) ---
+(function() {
+  const chunks = [];
+  process.stdin.on('data', chunk => chunks.push(chunk));
+  process.stdin.on('end', () => {
+    const input = Buffer.concat(chunks).toString('utf-8').trim();
+    if (!input) return;
+    const lines = input.split('\\n').filter(l => l.trim());
+    const args = lines.map(line => {
+      try { return JSON.parse(line.trim()); }
+      catch { return line.trim(); }
+    });
+
+    let sol;
+    try { sol = new Solution(); }
+    catch(e) { process.stderr.write('Error creating Solution: ' + e.message); return; }
+
+    const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(sol))
+      .filter(m => m !== 'constructor' && typeof sol[m] === 'function');
+
+    if (methods.length === 0) {
+      process.stderr.write('No callable method found on Solution');
+      return;
+    }
+
+    try {
+      const result = sol[methods[0]](...args);
+      console.log(JSON.stringify(result));
+    } catch(e) {
+      process.stderr.write('Error: ' + e.message);
+    }
+  });
+  process.stdin.resume();
+})();
+`;
+
     case 'cpp':
+      // C++ users typically write complete programs with main()
+      // Add a basic stdin reader if no main() is detected
+      if (code.includes('int main')) {
+        return code; // User has their own main
+      }
       return `${code}
 
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
+#include <cstdlib>
 
+// Auto-generated main for solutions without one
 int main() {
     std::string line;
     std::ostringstream oss;
     while (std::getline(std::cin, line)) {
         oss << line << "\\n";
     }
-    // The solution is already defined in the code above
-    // For competitive programming, main() is usually provided by the platform
+    // User must implement their own I/O in the Solution class
     return 0;
 }`;
+
     case 'java':
-      return code; // Java wraps differently
-    case 'python':
-      return code; // Python runs as-is
-    case 'javascript':
-      return code; // JS runs as-is
+      // Java solutions need a Main class with main()
+      if (code.includes('public static void main')) {
+        return code; // User has their own main
+      }
+      // For single-file Java, keep as-is (Java requires class matching filename)
+      return code;
+
     default:
       return code;
   }
@@ -119,8 +212,9 @@ async function runInDocker(
   const workDir = path.join(TEMP_DIR, runId);
   fs.mkdirSync(workDir, { recursive: true });
 
+  const wrappedCode = wrapUserCode(code, language, input);
   const srcFile = path.join(workDir, `solution${langConf.ext}`);
-  fs.writeFileSync(srcFile, code);
+  fs.writeFileSync(srcFile, wrappedCode);
 
   const startTime = Date.now();
 
@@ -216,8 +310,9 @@ async function runAsChildProcess(
   const workDir = path.join(TEMP_DIR, runId);
   fs.mkdirSync(workDir, { recursive: true });
 
+  const wrappedCode = wrapUserCode(code, language, input);
   const srcFile = path.join(workDir, `solution${langConf.ext}`);
-  fs.writeFileSync(srcFile, code);
+  fs.writeFileSync(srcFile, wrappedCode);
 
   const startTime = Date.now();
 
@@ -297,11 +392,20 @@ async function runAsChildProcess(
 }
 
 function normalizeOutput(output: string): string {
-  return output
+  const trimmed = output
     .trim()
     .replace(/\r\n/g, '\n')
     .replace(/\s+$/gm, '')
     .toLowerCase();
+
+  // Try JSON parse + stringify for consistent formatting
+  // Handles: [0, 1] vs [0,1], { "a": 1 } vs {"a":1}, etc.
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed);
+  } catch {
+    return trimmed;
+  }
 }
 
 export async function judgeCode(

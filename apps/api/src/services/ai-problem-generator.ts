@@ -1,10 +1,18 @@
 import OpenAI from 'openai';
 import { config } from '../config';
 
-const openai = new OpenAI({
-  apiKey: config.openaiApiKey || undefined,
-  baseURL: config.openaiBaseUrl || undefined,
-});
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI | null {
+  if (!config.openaiApiKey) return null;
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: config.openaiApiKey,
+      baseURL: config.openaiBaseUrl || undefined,
+    });
+  }
+  return openai;
+}
 
 export interface GeneratedProblemContent {
   description: string;
@@ -57,6 +65,8 @@ export async function generateProblemContent(
   topics: string[],
   existingDescription?: string
 ): Promise<GeneratedProblemContent> {
+  const client = getOpenAIClient();
+  if (!client) throw new Error('OpenAI API key not configured');
   const diffInfo = DIFFICULTY_CONSTRAINTS[difficulty] || DIFFICULTY_CONSTRAINTS.medium;
 
   const systemPrompt = `You are an expert competitive programming problem writer. Generate complete, professional-quality problem content similar to LeetCode or Codeforces.
@@ -112,7 +122,7 @@ IMPORTANT:
 - Reference solutions must be optimal and pass all test cases
 - For this difficulty level, constraints should be: n up to ${diffInfo.maxN}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await client.chat.completions.create({
     model: config.openaiModel,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -152,6 +162,8 @@ export async function generateTestCasesForProblem(
   count: number,
   category?: string
 ): Promise<GeneratedTestCase[]> {
+  const client = getOpenAIClient();
+  if (!client) throw new Error('OpenAI API key not configured');
   const batchSize = 50;
   const allTestCases: GeneratedTestCase[] = [];
   const remaining = count;
@@ -241,7 +253,7 @@ Generate test cases at or near the constraint maximums:
 
 Generate EXACTLY ${count} test cases. No duplicates.`;
 
-  const response = await openai.chat.completions.create({
+  const response = await client.chat.completions.create({
     model: config.openaiModel,
     messages: [
       { role: 'system', content: systemPrompt },
