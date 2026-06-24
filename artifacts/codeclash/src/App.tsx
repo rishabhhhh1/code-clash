@@ -26,14 +26,14 @@ function Router() {
       <Route path="/register" component={Register} />
       
       {/* Protected/Main Routes */}
-      <Route path="/">
+      <Route path="/" nest>
         <Layout>
           <Switch>
             <Route path="/" component={Lobby} />
             <Route path="/room/create" component={CreateRoom} />
             <Route path="/room/:roomCode" component={RoomView} />
-            <Route path="/battle/:battleId" component={BattleView} />
             <Route path="/battle/:battleId/results" component={BattleResults} />
+            <Route path="/battle/:battleId" component={BattleView} />
             <Route path="/leaderboard" component={Leaderboard} />
             <Route path="/profile/:username" component={Profile} />
             <Route path="/friends" component={Friends} />
