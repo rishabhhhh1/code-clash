@@ -1,99 +1,79 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/store/authStore';
+import { authAPI } from '@/lib/api';
 
 export default function LoginPage() {
   const [handle, setHandle] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const { setUser } = useAuthStore();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      localStorage.setItem('token', data.data.token);
-      window.location.href = '/dashboard';
-    } catch (err: any) {
-      setError(err.message);
+      const data = await authAPI.login(handle);
+      setUser(data.user);
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-      <div className="w-full max-w-md p-8 space-y-6 border rounded-lg bg-card text-card-foreground shadow-lg backdrop-blur-md">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Welcome Back</h1>
-          <p className="text-muted-foreground mt-2">Log in with your Codeforces account</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">⚔️ CodeClash</h1>
+          <p className="text-gray-400">Battle. Code. Dominate.</p>
         </div>
 
-        {error && (
-          <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
-            {error}
-          </div>
-        )}
+        <div className="bg-slate-900 border border-purple-500 rounded-lg p-8 shadow-xl">
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Codeforces Handle
+              </label>
+              <input
+                type="text"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="Enter your handle"
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                disabled={loading}
+              />
+            </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="handle" className="block text-sm font-medium mb-1">
-              Codeforces Handle
-            </label>
-            <input
-              id="handle"
-              type="text"
-              value={handle}
-              onChange={(e) => setHandle(e.target.value)}
-              required
-              minLength={3}
-              maxLength={24}
-              pattern="^[a-zA-Z0-9_\-\.]+$"
-              className="w-full px-3 py-2 border rounded-md bg-transparent focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-              placeholder="tourist"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter your Codeforces username. Don&apos;t have one?{' '}
-              <a href="https://codeforces.com/register" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                Create one
-              </a>
-            </p>
-          </div>
+            {error && (
+              <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm"
-          >
-            {loading ? 'Logging in...' : 'Log In with Codeforces'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading || !handle}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold py-3 rounded-lg transition-all duration-200"
+            >
+              {loading ? 'Connecting...' : 'Login with Codeforces'}
+            </button>
+          </form>
 
-        <div className="text-center text-xs text-muted-foreground border border-dashed border-muted p-3 rounded">
-          <p className="font-medium mb-1">How it works:</p>
-          <p>Enter your Codeforces handle to login. We&apos;ll verify your account exists on Codeforces and sync your rating automatically.</p>
+          <p className="text-gray-400 text-sm mt-6 text-center">
+            Don't have a Codeforces account?{' '}
+            <a href="https://codeforces.com/register" className="text-purple-400 hover:text-purple-300" target="_blank">
+              Create one
+            </a>
+          </p>
         </div>
-
-        <p className="text-center text-sm text-muted-foreground">
-          New to Codeforces?{' '}
-          <a href="https://codeforces.com/register" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-            Create a Codeforces account
-          </a>
-        </p>
       </div>
     </div>
   );
