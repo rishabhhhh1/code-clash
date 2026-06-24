@@ -1,64 +1,56 @@
 import { Router } from 'express';
+import { z } from 'zod';
+import { Problem } from '../../models/Problem';
+import { validate } from '../../middleware/validate';
 import { AppError } from '../../middleware/error';
-import {
-  getProblemset,
-  getRandomProblems,
-  getProblemUrl,
-  getContestUrl,
-  getDifficultyFromRating,
-  getContestList,
-} from '../../services/codeforces';
+import { serializeProblem } from '../../utils/serializers';
+import { PROBLEM_TOPICS, DIFFICULTY_LEVELS } from '../../utils/constants';
 
 const router = Router();
 
-// Get problems list with search, difficulty, topic filters
-router.get('/', async (req, res, next) => {
+const getProblemSchema = z.object({
+  query: z.object({
+    difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+    topic: z.string().optional(),
+    page: z.string().transform(Number).optional(),
+    limit: z.string().transform(Number).optional(),
+  }),
+});
+
+// Get all problems with filters
+router.get('/', validate(getProblemSchema), async (req, res, next) => {
   try {
-    const { tags, minRating, maxRating, limit: limitStr, page: pageStr, search } = req.query;
+    const page = (req.query.page as any) || 1;
+    const limit = Math.min((req.query.limit as any) || 20, 100);
+    const skip = (page - 1) * limit;
 
-    const tagList = tags ? (tags as string).split(',').map((t) => t.trim()) : undefined;
-    const minR = minRating ? parseInt(minRating as string) : undefined;
-    const maxR = maxRating ? parseInt(maxRating as string) : undefined;
-    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 100));
-    const page = Math.max(1, parseInt(pageStr as string) || 1);
+    const query: any = { isActive: true };
 
-    const { problems } = await getProblemset(tagList);
-
-    let filtered = problems;
-    if (minR !== undefined) {
-      filtered = filtered.filter((p) => (p.rating || 0) >= minR);
-    }
-    if (maxR !== undefined) {
-      filtered = filtered.filter((p) => (p.rating || 0) <= maxR);
-    }
-    if (search && typeof search === 'string') {
-      const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          `${p.contestId}${p.index}`.toLowerCase().includes(q)
-      );
+    if (req.query.difficulty) {
+      query.difficulty = req.query.difficulty;
     }
 
-    const total = filtered.length;
-    const start = (page - 1) * limit;
-    const pageItems = filtered.slice(start, start + limit);
+    if (req.query.topic) {
+      query.topics = req.query.topic;
+    }
 
-    const problemsWithDifficulty = pageItems.map((p) => ({
-      ...p,
-      difficulty: getDifficultyFromRating(p.rating),
-      url: getProblemUrl(p.contestId, p.index),
-      contestUrl: getContestUrl(p.contestId),
-    }));
+    const problems = await Problem.find(query)
+      .sort({ rating: 1 })
+      .limit(limit)
+      .skip(skip);
+
+    const total = await Problem.countDocuments(query);
 
     res.json({
       success: true,
       data: {
-        items: problemsWithDifficulty,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        problems: problems.map(serializeProblem),
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
       },
     });
   } catch (error) {
@@ -66,88 +58,42 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// Get random problems for battle
+// Get random problem
 router.get('/random', async (req, res, next) => {
   try {
-    const { tags, count: countStr, minRating, maxRating } = req.query;
-    const count = Math.min(10, Math.max(1, parseInt(countStr as string) || 1));
+    const difficulty = (req.query.difficulty as string) || 'medium';
+    const problem = await Problem.findOne({
+      difficulty,
+      isActive: true,
+    });
 
-    const tagList = tags ? (tags as string).split(',').map(t => t.trim()) : undefined;
-    const minR = minRating ? parseInt(minRating as string) : undefined;
-    const maxR = maxRating ? parseInt(maxRating as string) : undefined;
-
-    const problems = await getRandomProblems(count, tagList, minR, maxR);
-
-    // Add difficulty and URL
-    const problemsWithDetails = problems.map(p => ({
-      ...p,
-      difficulty: getDifficultyFromRating(p.rating),
-      url: getProblemUrl(p.contestId, p.index),
-    }));
-
-    res.json({ success: true, data: problemsWithDetails });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Get topics list (for filtering UI)
-router.get('/topics', async (_req, res, next) => {
-  try {
-    const { problems } = await getProblemset();
-
-    const topicCount: Record<string, number> = {};
-    for (const p of problems) {
-      for (const t of p.tags) {
-        topicCount[t] = (topicCount[t] || 0) + 1;
-      }
+    if (!problem) {
+      throw new AppError(404, 'No problems found');
     }
 
-    const topics = Object.entries(topicCount)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-
-    res.json({ success: true, data: topics });
+    res.json({ success: true, data: serializeProblem(problem) });
   } catch (error) {
     next(error);
   }
 });
 
-// Get contests list
-router.get('/contests', async (req, res, next) => {
+// Get problem by ID
+router.get('/:id', async (req, res, next) => {
   try {
-    const { gym } = req.query;
-    const contests = await getContestList(gym === 'true');
-
-    res.json({ success: true, data: contests });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Get problem by contestId and index
-router.get('/:contestId/:index', async (req, res, next) => {
-  try {
-    const { contestId, index } = req.params;
-
-    const { problems } = await getProblemset();
-    const problem = problems.find(p => p.contestId === parseInt(contestId) && p.index === index);
-
+    const problem = await Problem.findById(req.params.id);
     if (!problem) {
       throw new AppError(404, 'Problem not found');
     }
 
-    const problemWithDetails = {
-      ...problem,
-      difficulty: getDifficultyFromRating(problem.rating),
-      url: getProblemUrl(problem.contestId, problem.index),
-      contestUrl: getContestUrl(problem.contestId),
-    };
-
-    res.json({ success: true, data: problemWithDetails });
+    res.json({ success: true, data: serializeProblem(problem) });
   } catch (error) {
     next(error);
   }
+});
+
+// Get all topics
+router.get('/metadata/topics', (req, res) => {
+  res.json({ success: true, data: PROBLEM_TOPICS });
 });
 
 export const problemsRouter = router;

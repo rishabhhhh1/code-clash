@@ -1,103 +1,61 @@
-import { Types } from 'mongoose';
-import { IUser } from '../models/User';
-import { IRoom } from '../models/Room';
-
-export function serializeUser(user: IUser | null | undefined) {
-  if (!user) return null;
+export const serializeUser = (user: any) => {
   return {
-    id: user._id.toString(),
+    id: user._id,
     codeforcesHandle: user.codeforcesHandle,
-    username: user.username || user.codeforcesHandle,
+    username: user.username,
     avatar: user.avatar,
-    bio: user.bio,
     rating: user.rating,
     maxRating: user.maxRating,
     rank: user.rank,
     contribution: user.contribution,
     battleWins: user.battleWins,
     battleLosses: user.battleLosses,
-    winStreak: user.winStreak,
-    maxWinStreak: user.maxWinStreak,
+    battleDraws: user.battleDraws,
     totalBattles: user.totalBattles,
-    favoriteTopics: user.favoriteTopics,
-    codeforcesRating: user.rating,
-    codeforcesMaxRating: user.maxRating,
-    codeforcesRank: user.rank,
+    winStreak: user.winStreak,
     isOnline: user.isOnline,
+    favoriteTopics: user.favoriteTopics,
     createdAt: user.createdAt,
   };
-}
+};
 
-export function serializePlayer(player: IRoom['players'][0], user?: IUser | null) {
-  const u = user || (player.user as unknown as IUser);
+export const serializeBattle = (battle: any) => {
   return {
-    id: u?._id?.toString() || player.user.toString(),
-    user: serializeUser(u),
-    status: player.status,
-    score: player.score,
-    rank: player.rank,
-    problemsSolved: player.problemsSolved,
-    submissionsCount: player.submissionsCount,
-    solveTime: player.solveTime,
-    penalty: player.penalty,
-    isAlive: player.status !== 'eliminated' && player.status !== 'disconnected',
-    isReady: player.status === 'ready',
-    joinedAt: player.joinedAt,
+    id: battle._id,
+    code: battle.code,
+    creatorId: battle.creatorId,
+    mode: battle.mode,
+    status: battle.status,
+    playerCount: battle.playerCount,
+    maxPlayers: battle.maxPlayers,
+    difficulty: battle.difficulty,
+    topics: battle.topics,
+    timeLimit: battle.timeLimit,
+    isPublic: battle.isPublic,
+    problemId: battle.problemId,
+    participants: battle.participants,
+    spectators: battle.spectators,
+    startTime: battle.startTime,
+    endTime: battle.endTime,
+    leaderboard: battle.leaderboard,
+    createdAt: battle.createdAt,
   };
-}
+};
 
-export function serializeRoom(
-  room: IRoom,
-  usersMap?: Map<string, IUser>
-) {
-  const hostId = room.host.toString();
-  const host = usersMap?.get(hostId);
-
-  const players = room.players.map((p) => {
-    const userId = p.user.toString();
-    return serializePlayer(p, usersMap?.get(userId));
-  });
-
-  const currentProblem = room.problems[room.currentRound] || room.problems[0];
-
+export const serializeProblem = (problem: any) => {
   return {
-    id: room._id.toString(),
-    code: room.code,
-    name: room.name,
-    creatorId: hostId,
-    host: hostId,
-    mode: room.mode,
-    status: room.status,
-    difficulty: room.difficulty,
-    topics: room.topics,
-    timeControl: Math.floor(room.timeControl / 60) || room.timeControl,
-    playerCount: room.players.length,
-    maxPlayers: room.maxPlayers,
-    isPublic: room.isPublic,
-    inviteCode: room.inviteCode,
-    joinApproval: room.joinApproval,
-    pendingPlayers: room.pendingPlayers.map((id) => id.toString()),
-    spectators: room.spectators.map((id) => id.toString()),
-    currentRound: room.currentRound,
-    totalRounds: room.totalRounds,
-    contestId: currentProblem?.contestId ?? null,
-    problemIndex: currentProblem?.index ?? null,
-    problems: room.problems,
-    startedAt: room.startedAt,
-    endedAt: room.endedAt,
-    startTime: room.startedAt,
-    endTime: room.endedAt
-      ? room.endedAt
-      : room.startedAt
-        ? new Date(room.startedAt.getTime() + room.timeControl * 1000)
-        : null,
-    winner: room.winner?.toString(),
-    players,
-    creator: serializeUser(host),
-    createdAt: room.createdAt,
+    id: problem._id,
+    title: problem.title,
+    slug: problem.slug,
+    difficulty: problem.difficulty,
+    description: problem.description,
+    examples: problem.examples,
+    constraints: problem.constraints,
+    topics: problem.topics,
+    timeLimit: problem.timeLimit,
+    memoryLimit: problem.memoryLimit,
+    rating: problem.rating,
+    solveCount: problem.solveCount,
+    submissions: problem.submissions,
   };
-}
-
-export function toObjectId(id: string): Types.ObjectId {
-  return new Types.ObjectId(id);
-}
+};

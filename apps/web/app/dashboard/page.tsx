@@ -1,127 +1,149 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuthStore } from '@/lib/store/authStore';
+import { battlesAPI, rankingAPI } from '@/lib/api';
 
-export default function DashboardPage() {
+export default function Dashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [stats, setStats] = useState<any>(null);
+  const { user, token } = useAuthStore();
+  const [battles, setBattles] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!user || !token) {
       router.push('/auth/login');
       return;
     }
-    fetchUserData(token);
-  }, []);
 
-  const fetchUserData = async (token: string) => {
-    try {
-      const [userRes, statsRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/users/me/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+    const loadData = async () => {
+      try {
+        const [battlesData, leaderboardData] = await Promise.all([
+          battlesAPI.getPublicLobby(),
+          rankingAPI.getLeaderboard(),
+        ]);
+        setBattles(battlesData.activeBattles || []);
+        setLeaderboard(leaderboardData || []);
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      const userData = await userRes.json();
-      const statsData = await statsRes.json();
+    loadData();
+  }, [user, token, router]);
 
-      if (userData.success) setUser(userData.data);
-      if (statsData.success) setStats(statsData.data);
-    } catch (error) {
-      console.error('Failed to fetch user data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
+  if (!user) {
+    return null;
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 border rounded-md hover:bg-accent transition-colors"
-        >
-          Log Out
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-950">
+      {/* Header */}
+      <header className="bg-slate-900 border-b border-slate-800">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-white">⚔️ CodeClash</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-white font-bold">{user.username}</p>
+              <p className="text-sm text-gray-400">{user.rank} • Rating: {user.rating}</p>
+            </div>
+            <img src={user.avatar} alt="avatar" className="w-10 h-10 rounded-full" />
+          </div>
+        </div>
+      </header>
 
-      {user && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <div className="border rounded-lg p-6">
-            <div className="text-sm text-muted-foreground">Rating</div>
-            <div className="text-3xl font-bold mt-1">{user.rating}</div>
-            <div className="text-sm text-primary mt-1 capitalize">{user.rank}</div>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-slate-900 p-6 rounded-lg border border-slate-800">
+            <p className="text-gray-400 text-sm">Rating</p>
+            <p className="text-3xl font-bold text-purple-400">{user.rating}</p>
           </div>
-          <div className="border rounded-lg p-6">
-            <div className="text-sm text-muted-foreground">Total Battles</div>
-            <div className="text-3xl font-bold mt-1">{user.totalBattles}</div>
+          <div className="bg-slate-900 p-6 rounded-lg border border-slate-800">
+            <p className="text-gray-400 text-sm">Battles</p>
+            <p className="text-3xl font-bold text-blue-400">{user.totalBattles}</p>
           </div>
-          <div className="border rounded-lg p-6">
-            <div className="text-sm text-muted-foreground">Wins</div>
-            <div className="text-3xl font-bold mt-1 text-green-500">{user.wins}</div>
+          <div className="bg-slate-900 p-6 rounded-lg border border-slate-800">
+            <p className="text-gray-400 text-sm">Wins</p>
+            <p className="text-3xl font-bold text-green-400">{user.battleWins}</p>
           </div>
-          <div className="border rounded-lg p-6">
-            <div className="text-sm text-muted-foreground">Win Rate</div>
-            <div className="text-3xl font-bold mt-1">
-              {user.totalBattles > 0 ? ((user.wins / user.totalBattles) * 100).toFixed(1) : 0}%
+          <div className="bg-slate-900 p-6 rounded-lg border border-slate-800">
+            <p className="text-gray-400 text-sm">Win Rate</p>
+            <p className="text-3xl font-bold text-yellow-400">
+              {user.totalBattles > 0 ? ((user.battleWins / user.totalBattles) * 100).toFixed(1) : 0}%
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Link href="/battle/create" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 rounded-lg text-center transition-all">
+            🎮 Create Battle
+          </Link>
+          <Link href="/matchmaking" className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-lg text-center transition-all">
+            ⚡ Quick Match
+          </Link>
+          <Link href="/lobby" className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-4 rounded-lg text-center transition-all">
+            👥 Join Lobby
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Active Battles */}
+          <div className="lg:col-span-2">
+            <h2 className="text-xl font-bold text-white mb-4">Active Battles</h2>
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-gray-400">Loading...</p>
+              ) : battles.length === 0 ? (
+                <p className="text-gray-400">No active battles</p>
+              ) : (
+                battles.slice(0, 5).map((battle) => (
+                  <Link
+                    key={battle.id}
+                    href={`/battle/${battle.code}`}
+                    className="bg-slate-900 p-4 rounded-lg border border-slate-800 hover:border-purple-500 transition-all block"
+                  >
+                    <p className="text-white font-bold">{battle.mode.toUpperCase()}</p>
+                    <p className="text-sm text-gray-400">
+                      {battle.playerCount}/{battle.maxPlayers} players • {battle.difficulty}
+                    </p>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Top Players */}
+          <div>
+            <h2 className="text-xl font-bold text-white mb-4">Top Players</h2>
+            <div className="space-y-2">
+              {loading ? (
+                <p className="text-gray-400">Loading...</p>
+              ) : (
+                leaderboard.slice(0, 10).map((player, idx) => (
+                  <div key={player.userId} className="bg-slate-900 p-3 rounded-lg border border-slate-800">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-bold text-sm">#{idx + 1}</p>
+                        <p className="text-gray-400 text-xs">Rating: {player.rating}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
-      )}
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="border rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="space-y-3">
-            <a
-              href="/battle/create"
-              className="block w-full py-2 px-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center"
-            >
-              Create Battle
-            </a>
-            <a
-              href="/lobby"
-              className="block w-full py-2 px-4 border rounded-md hover:bg-accent transition-colors text-center"
-            >
-              Browse Lobby
-            </a>
-            <a
-              href="/problems"
-              className="block w-full py-2 px-4 border rounded-md hover:bg-accent transition-colors text-center"
-            >
-              Practice Problems
-            </a>
-          </div>
-        </div>
-
-        <div className="border rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-          <div className="text-muted-foreground text-center py-8">
-            No recent activity
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
