@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CodeClash - Real-time competitive coding battle platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User management
+  - name: rooms
+    description: Battle room management
+  - name: battles
+    description: Battle management
+  - name: problems
+    description: Problem management
+  - name: leaderboard
+    description: Leaderboard and rankings
+  - name: lobby
+    description: Lobby and live feed
+  - name: friends
+    description: Friends and social features
+  - name: achievements
+    description: Achievement management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +39,1115 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Users ──
+  /users/register:
+    post:
+      operationId: registerUser
+      tags: [users]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRegistration"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+
+  /users/login:
+    post:
+      operationId: loginUser
+      tags: [users]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserLogin"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{username}:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Get user profile by username
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+  /users/{username}/history:
+    get:
+      operationId: getUserBattleHistory
+      tags: [users]
+      summary: Get user battle history
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BattleHistoryEntry"
+
+  /users/sync-codeforces:
+    post:
+      operationId: syncCodeforcesHandle
+      tags: [users]
+      summary: Sync user's Codeforces handle data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CfSyncRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ── Rooms ──
+  /rooms:
+    get:
+      operationId: listRooms
+      tags: [rooms]
+      summary: List public battle rooms
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [waiting, active, finished]
+        - name: battleType
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Room"
+
+    post:
+      operationId: createRoom
+      tags: [rooms]
+      summary: Create a new battle room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  /rooms/{roomCode}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Get room by code
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Not found
+
+  /rooms/{roomCode}/join:
+    post:
+      operationId: joinRoom
+      tags: [rooms]
+      summary: Request to join a room
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinRoomRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  /rooms/{roomCode}/ready:
+    post:
+      operationId: setReady
+      tags: [rooms]
+      summary: Toggle ready status
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomParticipant"
+
+  /rooms/{roomCode}/start:
+    post:
+      operationId: startBattle
+      tags: [rooms]
+      summary: Start the battle (host only)
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Battle"
+
+  /rooms/{roomCode}/approve/{userId}:
+    post:
+      operationId: approveJoinRequest
+      tags: [rooms]
+      summary: Approve/reject join request (host only)
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinApproval"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  # ── Battles ──
+  /battles/{battleId}:
+    get:
+      operationId: getBattle
+      tags: [battles]
+      summary: Get battle details
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Battle"
+
+  /battles/{battleId}/leaderboard:
+    get:
+      operationId: getBattleLeaderboard
+      tags: [battles]
+      summary: Get battle leaderboard
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BattleParticipantStatus"
+
+  /battles/{battleId}/submit:
+    post:
+      operationId: recordSubmission
+      tags: [battles]
+      summary: Record a Codeforces submission attempt
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmissionRecord"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BattleParticipantStatus"
+
+  # ── Problems ──
+  /problems:
+    get:
+      operationId: listProblems
+      tags: [problems]
+      summary: List cached Codeforces problems
+      parameters:
+        - name: rating
+          in: query
+          schema:
+            type: integer
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Problem"
+
+  /problems/random:
+    get:
+      operationId: getRandomProblem
+      tags: [problems]
+      summary: Get a random problem matching criteria
+      parameters:
+        - name: rating
+          in: query
+          schema:
+            type: integer
+        - name: topic
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /problems/fetch-cf:
+    post:
+      operationId: fetchCodeforcesProblems
+      tags: [problems]
+      summary: Fetch and cache problems from Codeforces API
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchResult"
+
+  # ── Leaderboard ──
+  /leaderboard/global:
+    get:
+      operationId: getGlobalLeaderboard
+      tags: [leaderboard]
+      summary: Get global player leaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /leaderboard/top-players:
+    get:
+      operationId: getTopPlayers
+      tags: [leaderboard]
+      summary: Get top players by various metrics
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopPlayers"
+
+  # ── Lobby ──
+  /lobby/stats:
+    get:
+      operationId: getLobbyStats
+      tags: [lobby]
+      summary: Get lobby statistics (online players, active battles, etc.)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LobbyStats"
+
+  /lobby/feed:
+    get:
+      operationId: getLobbyFeed
+      tags: [lobby]
+      summary: Get recent battle events feed
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedEvent"
+
+  /lobby/active-battles:
+    get:
+      operationId: getActiveBattles
+      tags: [lobby]
+      summary: Get all currently active and waiting battles
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActiveBattle"
+
+  # ── Friends ──
+  /friends:
+    get:
+      operationId: getFriends
+      tags: [friends]
+      summary: Get current user's friends list
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FriendEntry"
+
+  /friends/request:
+    post:
+      operationId: sendFriendRequest
+      tags: [friends]
+      summary: Send a friend request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FriendRequestInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendEntry"
+
+  /friends/{friendshipId}/respond:
+    post:
+      operationId: respondFriendRequest
+      tags: [friends]
+      summary: Accept or reject a friend request
+      parameters:
+        - name: friendshipId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FriendResponse"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendEntry"
+
+  # ── Achievements ──
+  /achievements:
+    get:
+      operationId: getAllAchievements
+      tags: [achievements]
+      summary: Get all available achievements
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Achievement"
+
+  /achievements/mine:
+    get:
+      operationId: getMyAchievements
+      tags: [achievements]
+      summary: Get current user's earned achievements
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserAchievement"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ── Auth ──
+    UserRegistration:
+      type: object
+      required: [username, password, cfHandle]
+      properties:
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 6
+        cfHandle:
+          type: string
+
+    UserLogin:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    # ── Users ──
+    User:
+      type: object
+      required: [id, username, cfHandle, rating, rank, battleWins, battleLosses, totalBattles, winStreak, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        cfHandle:
+          type: string
+        rating:
+          type: integer
+        maxRating:
+          type: integer
+        rank:
+          type: string
+        maxRank:
+          type: string
+        contribution:
+          type: integer
+        battleWins:
+          type: integer
+        battleLosses:
+          type: integer
+        totalBattles:
+          type: integer
+        winStreak:
+          type: integer
+        favoriteTopics:
+          type: array
+          items:
+            type: string
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        favoriteTopics:
+          type: array
+          items:
+            type: string
+        avatarUrl:
+          type: string
+
+    CfSyncRequest:
+      type: object
+      required: [cfHandle]
+      properties:
+        cfHandle:
+          type: string
+
+    BattleHistoryEntry:
+      type: object
+      required: [battleId, battleType, result, solveTime, attempts, problemTitle, problemRating, opponent, createdAt]
+      properties:
+        battleId:
+          type: integer
+        battleType:
+          type: string
+        result:
+          type: string
+          enum: [win, loss, draw]
+        solveTime:
+          type: ["integer", "null"]
+        attempts:
+          type: integer
+        problemTitle:
+          type: string
+        problemRating:
+          type: integer
+        opponent:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    # ── Rooms ──
+    Room:
+      type: object
+      required: [id, roomCode, hostId, hostUsername, battleType, difficulty, status, maxPlayers, requireApproval, isPrivate, participants, createdAt]
+      properties:
+        id:
+          type: integer
+        roomCode:
+          type: string
+        hostId:
+          type: integer
+        hostUsername:
+          type: string
+        battleType:
+          type: string
+          enum: [duel, deathmatch, multiplayer, topic_battle, battle_royale, arena]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard, mixed]
+        topic:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [waiting, starting, active, finished]
+        maxPlayers:
+          type: integer
+        requireApproval:
+          type: boolean
+        isPrivate:
+          type: boolean
+        inviteLink:
+          type: ["string", "null"]
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomParticipant"
+        battleId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    RoomInput:
+      type: object
+      required: [battleType, difficulty, maxPlayers]
+      properties:
+        battleType:
+          type: string
+          enum: [duel, deathmatch, multiplayer, topic_battle, battle_royale, arena]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard, mixed]
+        topic:
+          type: string
+        maxPlayers:
+          type: integer
+        requireApproval:
+          type: boolean
+        isPrivate:
+          type: boolean
+
+    RoomParticipant:
+      type: object
+      required: [userId, username, cfHandle, rating, rank, isReady, isHost]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        cfHandle:
+          type: string
+        rating:
+          type: integer
+        rank:
+          type: string
+        isReady:
+          type: boolean
+        isHost:
+          type: boolean
+        joinedAt:
+          type: string
+
+    JoinRoomRequest:
+      type: object
+      properties:
+        roomCode:
+          type: string
+
+    JoinApproval:
+      type: object
+      required: [approved]
+      properties:
+        approved:
+          type: boolean
+
+    # ── Battles ──
+    Battle:
+      type: object
+      required: [id, roomId, roomCode, battleType, status, problem, participants, startedAt]
+      properties:
+        id:
+          type: integer
+        roomId:
+          type: integer
+        roomCode:
+          type: string
+        battleType:
+          type: string
+        status:
+          type: string
+          enum: [active, finished]
+        problem:
+          $ref: "#/components/schemas/Problem"
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/BattleParticipantStatus"
+        startedAt:
+          type: string
+        endedAt:
+          type: ["string", "null"]
+        winnerId:
+          type: ["integer", "null"]
+        winnerUsername:
+          type: ["string", "null"]
+        durationSeconds:
+          type: ["integer", "null"]
+
+    BattleParticipantStatus:
+      type: object
+      required: [userId, username, cfHandle, rating, rank, solved, attempts, penalty, rank_position]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        cfHandle:
+          type: string
+        rating:
+          type: integer
+        rank:
+          type: string
+        solved:
+          type: boolean
+        solveTimeSeconds:
+          type: ["integer", "null"]
+        attempts:
+          type: integer
+        penalty:
+          type: integer
+        rank_position:
+          type: integer
+        isEliminated:
+          type: boolean
+        lastVerdict:
+          type: ["string", "null"]
+
+    SubmissionRecord:
+      type: object
+      required: [cfSubmissionId, verdict]
+      properties:
+        cfSubmissionId:
+          type: integer
+        verdict:
+          type: string
+          enum: [OK, WRONG_ANSWER, RUNTIME_ERROR, TIME_LIMIT_EXCEEDED, COMPILATION_ERROR, MEMORY_LIMIT_EXCEEDED, PARTIAL]
+
+    # ── Problems ──
+    Problem:
+      type: object
+      required: [id, contestId, problemIndex, title, rating, tags, cfUrl]
+      properties:
+        id:
+          type: integer
+        contestId:
+          type: integer
+        problemIndex:
+          type: string
+        title:
+          type: string
+        rating:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        cfUrl:
+          type: string
+        solvedCount:
+          type: ["integer", "null"]
+
+    FetchResult:
+      type: object
+      required: [fetched, cached, message]
+      properties:
+        fetched:
+          type: integer
+        cached:
+          type: integer
+        message:
+          type: string
+
+    # ── Leaderboard ──
+    LeaderboardEntry:
+      type: object
+      required: [rank_position, userId, username, cfHandle, rating, rank, battleWins, totalBattles, winRate, winStreak]
+      properties:
+        rank_position:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        cfHandle:
+          type: string
+        rating:
+          type: integer
+        rank:
+          type: string
+        battleWins:
+          type: integer
+        totalBattles:
+          type: integer
+        winRate:
+          type: number
+        winStreak:
+          type: integer
+
+    TopPlayers:
+      type: object
+      required: [byRating, byWins, byStreak]
+      properties:
+        byRating:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+        byWins:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+        byStreak:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+
+    # ── Lobby ──
+    LobbyStats:
+      type: object
+      required: [onlinePlayers, activeBattles, waitingRooms, totalBattlesToday, recentWinners]
+      properties:
+        onlinePlayers:
+          type: integer
+        activeBattles:
+          type: integer
+        waitingRooms:
+          type: integer
+        totalBattlesToday:
+          type: integer
+        recentWinners:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecentWinner"
+
+    RecentWinner:
+      type: object
+      required: [userId, username, cfHandle, rating, rank, battleType, wonAt]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        cfHandle:
+          type: string
+        rating:
+          type: integer
+        rank:
+          type: string
+        battleType:
+          type: string
+        wonAt:
+          type: string
+
+    FeedEvent:
+      type: object
+      required: [id, eventType, message, timestamp]
+      properties:
+        id:
+          type: integer
+        eventType:
+          type: string
+          enum: [battle_started, battle_won, problem_solved, player_joined, achievement_unlocked, battle_royale_elimination]
+        message:
+          type: string
+        username:
+          type: ["string", "null"]
+        cfHandle:
+          type: ["string", "null"]
+        rating:
+          type: ["integer", "null"]
+        battleType:
+          type: ["string", "null"]
+        timestamp:
+          type: string
+
+    ActiveBattle:
+      type: object
+      required: [roomCode, battleType, playerCount, maxPlayers, status, hostUsername, topic, difficulty, startedAt]
+      properties:
+        roomCode:
+          type: string
+        battleType:
+          type: string
+        playerCount:
+          type: integer
+        maxPlayers:
+          type: integer
+        status:
+          type: string
+          enum: [waiting, active]
+        hostUsername:
+          type: string
+        topic:
+          type: ["string", "null"]
+        difficulty:
+          type: string
+        startedAt:
+          type: ["string", "null"]
+
+    # ── Friends ──
+    FriendEntry:
+      type: object
+      required: [id, userId, friendId, friendUsername, friendCfHandle, friendRating, friendRank, status]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        friendId:
+          type: integer
+        friendUsername:
+          type: string
+        friendCfHandle:
+          type: string
+        friendRating:
+          type: integer
+        friendRank:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        isOnline:
+          type: boolean
+
+    FriendRequestInput:
+      type: object
+      required: [targetUsername]
+      properties:
+        targetUsername:
+          type: string
+
+    FriendResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+
+    # ── Achievements ──
+    Achievement:
+      type: object
+      required: [id, key, title, description, icon, category]
+      properties:
+        id:
+          type: integer
+        key:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        icon:
+          type: string
+        category:
+          type: string
+          enum: [wins, streaks, topics, special]
+
+    UserAchievement:
+      type: object
+      required: [achievement, unlockedAt]
+      properties:
+        achievement:
+          $ref: "#/components/schemas/Achievement"
+        unlockedAt:
+          type: string

@@ -1,0 +1,473 @@
+Project Name: CodeClash
+
+Build a production-grade real-time competitive coding battle platform inspired by Codeforces, Chess.com matchmaking and PUBG battle royale.
+
+IMPORTANT
+
+I am starting from scratch.
+
+Design and implement the complete platform using best engineering practices.
+
+The goal is not another coding practice website.
+
+The goal is to create the most engaging multiplayer coding battle experience possible.
+
+Tech Stack
+
+* Next.js
+* Node.js
+* Express
+* MongoDB/Postres SQL 17
+* Socket.IO
+
+CORE CONCEPT
+
+Codeforces is the source of truth.
+
+Do NOT build a custom judge.
+
+Do NOT maintain hidden testcases.
+
+Codeforces handles:
+
+* submissions
+* verdicts
+* hidden testcases
+* judging
+
+CodeClash handles:
+
+* matchmaking
+* battle rooms
+* rankings
+* spectators
+* leaderboards
+* battle experience
+
+USER PROFILE
+
+Every user must connect a Codeforces handle.
+
+Store:
+
+* username
+* Codeforces handle
+* rating
+* max rating
+* rank
+* contribution
+* battle wins
+* battle losses
+* win streak
+* total battles
+* favorite topics
+
+LOBBY
+
+Create a central multiplayer lobby.
+
+Show:
+
+* active battles
+* ongoing battles
+* players online
+* top players
+* recent winners
+* battle feed
+
+MATCH TYPES
+
+* 1v1 Duel
+* Deathmatch
+* Multiplayer Battle
+* Public Room
+* Private Room
+* Topic Battle
+* Battle Royale
+* Arena Mode
+
+ROOM CREATION
+
+Host can:
+
+* create room
+* choose battle type
+* choose difficulty
+* choose topic
+* choose maximum players
+* generate battle code
+* generate invite link
+* enable join approval
+* public/private room
+
+JOIN APPROVAL MODE
+
+If enabled:
+
+1. User requests to join.
+2. Host receives:
+
+"User wants to join."
+
+3. Host can:
+
+* Accept
+* Reject
+
+4. User joins only after approval.
+
+WAITING ROOM
+
+After room creation:
+
+Show:
+
+* battle code
+* invite link
+* room type
+* connected players
+* ready status
+* selected difficulty
+* selected topic
+* player count
+
+Display:
+
+WAITING FOR PLAYERS...
+
+When someone joins:
+
+* real-time notification
+* join animation
+* lobby update
+
+READY SYSTEM
+
+Players must click Ready.
+
+Host can start only when required players are ready.
+
+PRE-MATCH EXPERIENCE
+
+Extremely important.
+
+Make it feel like PUBG, Chess.com and Valorant.
+
+Before battle starts show:
+
+* username
+* Codeforces handle
+* rating
+* max rating
+* rank
+* wins
+* losses
+* win rate
+* streak
+* total battles
+
+Display:
+
+* player cards
+* VS screen
+* matchmaking animation
+* battle countdown
+
+Battle should feel like entering a competitive match.
+
+MATCH START RULE
+
+Timer must NEVER start when room is created.
+
+Timer starts ONLY when:
+
+* all required players joined
+* players are ready
+* host starts battle
+
+FAIR MATCH SYSTEM
+
+Extremely important.
+
+Every player in a battle must receive the SAME problem.
+
+Examples:
+
+1v1:
+
+* same problem
+
+Deathmatch:
+
+* same problem
+
+Multiplayer:
+
+* same problem
+
+No player should ever receive an easier or harder problem than another player in the same match.
+
+TOPIC BATTLE MODE
+
+Players can battle on specific topics.
+
+Examples:
+
+* Binary Search
+* Graphs
+* Trees
+* DP
+* Greedy
+* Strings
+* Math
+* Number Theory
+* Sliding Window
+* Bitmask
+* Two Pointers
+
+Questions must come ONLY from the selected topic.
+
+TOPIC DUEL
+
+Example:
+
+Player A:
+Topic = Graphs
+Difficulty = 1400
+
+Player B joins.
+
+Battle starts with:
+
+* same topic
+* same difficulty
+* same problem
+
+RANKED MATCHMAKING
+
+Match players with similar ratings.
+
+Examples:
+
+1200 rating
+→ 1000–1400
+
+1600 rating
+→ 1400–1800
+
+2200 rating
+→ 2000+
+
+
+PROBLEM SYSTEM
+
+Use Codeforces problems.
+
+Use Codeforces API for metadata.
+
+Create a Problem Fetch Service.
+
+For every problem:
+
+* fetch metadata
+* fetch rating
+* fetch tags
+* cache locally
+
+Support:
+
+* random problem
+* topic problem
+* rating-based problem
+
+LIVE SUBMISSION TRACKING
+
+Track Codeforces submissions in real-time.
+
+Detect:
+
+* accepted
+* wrong answer
+* runtime error
+* compile error
+* attempts
+* solve time
+
+Update battle state instantly.
+
+REAL-TIME LEADERBOARD
+
+Show:
+
+* rank
+* solve status
+* solve time
+* attempts
+* penalty
+
+Update instantly.
+
+LIVE FEED
+
+Create PUBG-style battle feed.
+
+SPECTATOR MODE
+
+Create a complete spectator system.
+
+Lobby shows:
+
+* active battles
+* ongoing matches
+* participants
+
+Spectators can:
+
+* watch battles live
+* watch rankings
+* watch solve events
+* watch leaderboard updates
+* watch timer updates
+* watch battle progress
+* watch winner screen
+
+Spectators cannot:
+
+* submit
+* interact
+* affect rankings
+
+BATTLE ROYALE MODE
+
+10–100 players.
+
+Round 1:
+800 rated problem
+
+Round 2:
+1000 rated problem
+
+Round 3:
+1200 rated problem
+
+Continue increasing difficulty.
+
+Players who fail are eliminated.
+
+Eliminated players become spectators automatically.
+
+Last player remaining wins.
+
+ARENA MODE
+
+Timed session.
+
+Players continuously solve problems.
+
+Correct solve:
+
+* points
+
+Wrong attempts:
+penalty
+
+Highest score wins.
+
+POST MATCH SCREEN
+
+Show:
+
+* winner
+* solve times
+* attempts
+* rating changes
+* rank changes
+* leaderboard
+* match statistics
+
+Provide:
+
+* rematch
+* share result
+* new battle
+
+SOCIAL FEATURES
+
+Implement:
+
+* friends system
+* battle invites
+* recent opponents
+* player profiles
+* battle history
+* achievements
+
+ACHIEVEMENTS
+
+Examples:
+
+* First Win
+* 3 Win Streak
+* 5 Win Streak
+* 10 Win Streak
+* Topic Master
+* Battle Royale Winner
+* Arena Champion
+
+ADVANCED FEATURES
+
+Implement if architecture supports:
+
+
+* daily challenges
+* battle replay timeline
+* spectator chat
+
+SECURITY
+
+Implement:
+
+* JWT authentication
+* Helmet
+* Rate limiting
+* Zod validation
+* Mongo indexes
+* Centralized error handling
+
+DATABASE
+
+Design scalable schemas for:
+
+* users
+* battles
+* rooms
+* participants
+* spectators
+* rankings
+* achievements
+* history
+* friendships
+* invitations
+
+FINAL DELIVERY
+
+Generate the complete production-ready project.
+
+Provide:
+
+* frontend
+* backend
+* database models
+* socket implementation
+* APIs
+* environment template
+* setup guide
+
+Project must run locally using:
+
+npm install
+npm run dev
+
+No AI-tool references.
+
+The final product should feel like a combination of Codeforces, Chess.com matchmaking and PUBG battle royale built specifically for competitive programmers.
