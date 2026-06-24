@@ -83,7 +83,8 @@ export default function RoomView() {
   if (isLoading) return <div className="p-8"><Skeleton className="h-64 w-full" /></div>;
   if (!room) return <div className="p-8 text-center text-muted-foreground">Room not found</div>;
 
-  const allReady = room.participants?.every(p => p.isReady) && room.participants.length > 1;
+  const nonHostParticipants = room.participants?.filter(p => !p.isHost) ?? [];
+  const allReady = nonHostParticipants.length > 0 && nonHostParticipants.every(p => p.isReady);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">

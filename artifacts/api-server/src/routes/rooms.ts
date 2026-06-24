@@ -96,7 +96,7 @@ router.post("/rooms", authMiddleware, async (req: any, res): Promise<void> => {
   await db.insert(roomParticipantsTable).values({
     roomId: room.id,
     userId: req.userId,
-    isReady: false,
+    isReady: true,
     isHost: true,
   });
 
