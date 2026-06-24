@@ -1,0 +1,62 @@
+I already know that Codeforces does not provide an official submission API.
+
+I want you to design and implement an alternative architecture that solves this problem while respecting Codeforces limitations.
+
+Goal:
+
+Build a system where users solve Codeforces problems entirely inside my platform without any "Solve on Codeforces" button.
+
+Requirements:
+
+1. Users must connect their actual Codeforces account, not just enter their handle.
+
+2. Do NOT build a fake integration that only stores the username.
+
+3. I need a real synchronization mechanism.
+
+4. When a user writes code and presses Submit on my platform:
+
+* The system should determine the safest and most reliable way to submit or synchronize with Codeforces.
+* If direct submission is impossible because of official limitations, design an alternative workflow instead of pretending it works.
+* Never generate fake APIs.
+
+5. After submission/synchronization:
+
+* Fetch verdicts.
+* Update Accepted, Wrong Answer, TLE, Runtime Error etc. on my platform.
+* Keep the user's progress synchronized.
+
+6. Before generating any code:
+
+First analyze Codeforces constraints and tell me:
+
+* What is officially possible?
+* What is impossible?
+* Which approaches violate Codeforces ToS?
+* Which approaches are production-safe?
+
+Then propose 2 architectures:
+
+Architecture A (recommended and production-safe)
+
+Architecture B (advanced but risky)
+
+For each architecture provide:
+
+* Complete system design
+* Database schema
+* Authentication flow
+* Sequence diagrams
+* API endpoints
+* Folder structure
+* Frontend and backend implementation
+
+Very important:
+
+Do NOT hallucinate any Codeforces submission API.
+
+If a feature is impossible, explicitly say it is impossible and redesign the workflow instead.
+
+The final output should be a complete production-ready implementation plan and code.
+
+Also ensure the UI never shows any "Solve on Codeforces" button and everything is managed inside my platform.
