@@ -43,7 +43,7 @@ export default function RoomView() {
 
   const handleJoin = () => {
     if (!roomCode) return;
-    joinMutation.mutate({ data: { roomCode } }, {
+    joinMutation.mutate({ roomCode, data: {} }, {
       onSuccess: () => {
         toast({ title: "Joined room" });
         queryClient.invalidateQueries({ queryKey: getGetRoomQueryKey(roomCode) });
@@ -55,7 +55,8 @@ export default function RoomView() {
   };
 
   const handleReady = () => {
-    readyMutation.mutate({ data: {} }, {
+    if (!roomCode) return;
+    readyMutation.mutate({ roomCode }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetRoomQueryKey(roomCode!) });
       }
@@ -63,7 +64,8 @@ export default function RoomView() {
   };
 
   const handleStart = () => {
-    startMutation.mutate({ data: {} }, {
+    if (!roomCode) return;
+    startMutation.mutate({ roomCode }, {
       onSuccess: (data) => {
         setLocation(`/battle/${data.id}`);
       },

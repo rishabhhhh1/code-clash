@@ -49,6 +49,7 @@ export default function BattleView() {
     if (!subId) return;
     
     submitMutation.mutate({
+      battleId,
       data: {
         cfSubmissionId: parseInt(subId),
         verdict: verdict as any

@@ -14,17 +14,24 @@ import {
 import axios from "axios";
 
 const router: IRouter = Router();
-const JWT_SECRET = process.env.JWT_SECRET || "codeclash-secret-key-change-in-prod";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET environment variable is required in production");
+  }
+  console.warn("[WARN] JWT_SECRET not set — using insecure dev fallback. Set JWT_SECRET before deploying.");
+}
+const _JWT_SECRET = JWT_SECRET || "codeclash-dev-only-secret-do-not-use-in-prod";
 
 function makeToken(userId: number, username: string) {
   // @ts-ignore
-  return jwt.sign({ id: userId, username }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ id: userId, username }, _JWT_SECRET, { expiresIn: "30d" });
 }
 
 export function verifyToken(token: string): { id: number; username: string } | null {
   try {
     // @ts-ignore
-    return jwt.verify(token, JWT_SECRET) as { id: number; username: string };
+    return jwt.verify(token, _JWT_SECRET) as { id: number; username: string };
   } catch {
     return null;
   }

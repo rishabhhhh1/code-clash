@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, usersTable, battlesTable, battleParticipantsTable, problemsTable, roomsTable, feedEventsTable } from "@workspace/db";
 import { GetBattleParams, GetBattleLeaderboardParams, RecordSubmissionParams, RecordSubmissionBody } from "@workspace/api-zod";
 import { authMiddleware } from "./users";
@@ -153,7 +153,15 @@ router.post("/battles/:battleId/submit", authMiddleware, async (req: any, res): 
   if (!battle) { res.status(404).json({ error: "Battle not found" }); return; }
 
   const [participant] = await db.select().from(battleParticipantsTable)
-    .where(eq(battleParticipantsTable.battleId, battleId));
+    .where(and(
+      eq(battleParticipantsTable.battleId, battleId),
+      eq(battleParticipantsTable.userId, req.userId)
+    ));
+
+  if (!participant) {
+    res.status(403).json({ error: "You are not a participant in this battle" });
+    return;
+  }
 
   const isAccepted = parsed.data.verdict === "OK";
   const solveTime = isAccepted
@@ -161,18 +169,21 @@ router.post("/battles/:battleId/submit", authMiddleware, async (req: any, res): 
     : null;
 
   const updateData: any = {
-    attempts: (participant?.attempts ?? 0) + 1,
+    attempts: (participant.attempts ?? 0) + 1,
     lastVerdict: parsed.data.verdict,
   };
-  if (isAccepted && !participant?.solved) {
+  if (isAccepted && !participant.solved) {
     updateData.solved = true;
     updateData.solveTimeSeconds = solveTime;
-    updateData.penalty = (participant?.attempts ?? 0) * 20 * 60 + (solveTime ?? 0);
+    updateData.penalty = (participant.attempts ?? 0) * 20 * 60 + (solveTime ?? 0);
   }
 
   const [updated] = await db.update(battleParticipantsTable)
     .set(updateData)
-    .where(eq(battleParticipantsTable.battleId, battleId))
+    .where(and(
+      eq(battleParticipantsTable.battleId, battleId),
+      eq(battleParticipantsTable.userId, req.userId)
+    ))
     .returning();
 
   // Check if battle is over (all solved or timeout)

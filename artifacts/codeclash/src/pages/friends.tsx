@@ -35,8 +35,8 @@ export default function Friends() {
     });
   };
 
-  const handleRespond = (friendId: number, accept: boolean) => {
-    respondMutation.mutate({ friendId, data: { accepted: accept } }, {
+  const handleRespond = (friendshipId: number, accept: boolean) => {
+    respondMutation.mutate({ friendshipId, data: { accepted: accept } }, {
       onSuccess: () => {
         toast({ title: accept ? "Request accepted" : "Request rejected" });
         queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
@@ -127,10 +127,10 @@ export default function Friends() {
                     <div key={req.id} className="p-4 flex items-center justify-between bg-accent/5">
                       <div className="font-bold">{req.friendUsername}</div>
                       <div className="flex gap-2">
-                        <Button size="icon" variant="default" className="h-8 w-8 bg-green-500 hover:bg-green-600" onClick={() => handleRespond(req.friendId, true)}>
+                        <Button size="icon" variant="default" className="h-8 w-8 bg-green-500 hover:bg-green-600" onClick={() => handleRespond(req.id, true)}>
                           <Check className="w-4 h-4" />
                         </Button>
-                        <Button size="icon" variant="destructive" className="h-8 w-8" onClick={() => handleRespond(req.friendId, false)}>
+                        <Button size="icon" variant="destructive" className="h-8 w-8" onClick={() => handleRespond(req.id, false)}>
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
