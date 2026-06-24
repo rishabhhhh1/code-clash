@@ -8,135 +8,62 @@ datasource db {
 }
 
 model User {
-  id                     String               @id @default(uuid())
-  email                  String               @unique
-  username               String               @unique
-  passwordHash           String?
-  avatar                 String?
-  bio                    String?
-  rating                 Int                  @default(1000)
-  rank                   String               @default("silver")
-  totalBattles           Int                  @default(0)
-  wins                   Int                  @default(0)
-  losses                 Int                  @default(0)
-  draws                  Int                  @default(0)
-  leetcodeUsername       String?
-  leetcodeSyncedAt       DateTime?
-  leetcodeTotalSolved    Int?
-  leetcodeEasySolved     Int?
-  leetcodeMediumSolved   Int?
-  leetcodeHardSolved     Int?
-  leetcodeAcceptanceRate Float?
-  leetcodeContestRating  Int?
-  leetcodeGlobalRanking  Int?
-  showLeetCodeStats      Boolean              @default(true)
-  emailNotifications     Boolean              @default(true)
-  battleInvites          Boolean              @default(true)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  createdBattles         Battle[]
-  battles                BattlePlayer[]
-  leetcodeSubmissions    LeetCodeSubmission[]
-  matchHistory           MatchHistory[]
-  oauthAccounts          OAuthAccount[]
-  submissions            Submission[]
+  id                       String               @id @default(uuid())
+  codeforcesHandle         String               @unique
+  avatar                   String?
+  bio                      String?
+  rating                   Int                  @default(1000)
+  rank                     String               @default("silver")
+  totalBattles             Int                  @default(0)
+  wins                     Int                  @default(0)
+  losses                   Int                  @default(0)
+  draws                    Int                  @default(0)
+  codeforcesRating         Int?
+  codeforcesMaxRating      Int?
+  codeforcesRank           String?
+  codeforcesTitlePhoto     String?
+  codeforcesVerified       Boolean              @default(false)
+  codeforcesLastSync       DateTime?
+  emailNotifications       Boolean              @default(true)
+  battleInvites            Boolean              @default(true)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  createdBattles           Battle[]
+  battles                  BattlePlayer[]
+  matchHistory             MatchHistory[]
+  submissions              Submission[]
 
   @@index([rating(sort: Desc)])
-  @@index([email])
-  @@index([username])
+  @@index([codeforcesHandle])
 }
 
-model OAuthAccount {
-  id           String    @id @default(uuid())
-  userId       String
-  provider     String
-  providerId   String
-  email        String?
-  username     String?
-  avatar       String?
-  accessToken  String?
-  refreshToken String?
-  expiresAt    DateTime?
-  scope        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerId])
-  @@index([userId])
-}
-
-model LeetCodeSubmission {
-  id           String   @id @default(uuid())
-  userId       String
-  problemSlug  String
-  problemTitle String
-  difficulty   String
-  status       String
-  language     String
-  runtime      Int?
-  memory       Int?
-  submittedAt  DateTime
-  contestId    String?
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([submittedAt])
-}
 
 model Problem {
-  id                    String       @id @default(uuid())
-  title                 String
-  slug                  String       @unique
-  leetcodeId            Int?         @unique
-  difficulty            String
-  description           String       @default("")
-  inputFormat           String?
-  outputFormat          String?
-  examples              Json         @default("[]")
-  constraints           Json         @default("[]")
-  hints                 Json?
-  testCases             Json         @default("[]")
-  referenceSolutions    Json?
-  totalTestCases        Int          @default(0)
-  generationStatus      String       @default("pending")
-  generatedAt           DateTime?
-  generationError       String?
-  topics                String[]
-  category              String?
-  companies             String[]
-  problemLink           String?
-  starterCodeCpp        String?
-  starterCodeJava       String?
-  starterCodePython     String?
-  starterCodeJavaScript String?
-  timeLimit             Int          @default(5000)
-  memoryLimit           Int          @default(256)
-  acceptanceRate        Float?
-  totalAccepted         Int?
-  totalSubmitted        Int?
-  likes                 Int?
-  dislikes              Int?
-  isPremium             Boolean      @default(false)
-  isActive              Boolean      @default(true)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-  battles               Battle[]
-  submissions           Submission[]
+  id              String   @id @default(uuid())
+  contestId       Int
+  index           String
+  name            String
+  rating          Int?
+  tags            String[]
+  points          Float?
+  type            String   @default("PROGRAMMING")
+  problemsetName  String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([difficulty])
-  @@index([topics])
-  @@index([leetcodeId])
-  @@index([category])
+  @@unique([contestId, index])
+  @@index([rating])
+  @@index([tags])
   @@index([isActive])
-  @@index([generationStatus])
 }
 
 model Battle {
   id           String         @id @default(uuid())
   code         String         @unique
   creatorId    String
-  problemId    String?
+  contestId    Int?
+  problemIndex String?
   mode         String
   status       String         @default("waiting")
   playerCount  Int            @default(0)
@@ -151,7 +78,6 @@ model Battle {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   creator      User           @relation(fields: [creatorId], references: [id])
-  problem      Problem?       @relation(fields: [problemId], references: [id])
   players      BattlePlayer[]
   matchHistory MatchHistory[]
   submissions  Submission[]
@@ -159,6 +85,7 @@ model Battle {
   @@index([code])
   @@index([status])
   @@index([isPublic])
+  @@index([contestId, problemIndex])
 }
 
 model BattlePlayer {
@@ -180,24 +107,24 @@ model BattlePlayer {
 }
 
 model Submission {
-  id        String   @id @default(uuid())
-  battleId  String
-  userId    String
-  problemId String
-  code      String
-  language  String
-  status    String   @default("pending")
-  runtime   Int?
-  memory    Int?
-  score     Int      @default(0)
-  createdAt DateTime @default(now())
-  battle    Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  problem   Problem  @relation(fields: [problemId], references: [id])
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  battleId     String
+  userId       String
+  contestId    Int
+  problemIndex String
+  code         String
+  language     String
+  status       String   @default("pending")
+  runtime      Int?
+  memory       Int?
+  score        Int      @default(0)
+  createdAt    DateTime @default(now())
+  battle       Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([battleId])
   @@index([userId])
-  @@index([problemId])
+  @@index([contestId, problemIndex])
 }
 
 model MatchHistory {

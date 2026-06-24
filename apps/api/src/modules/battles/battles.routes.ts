@@ -5,8 +5,7 @@ import { prisma } from '../../config/database';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { AppError } from '../../middleware/error';
-import { ensureProblemGenerated, getVisibleTestCases, getAllTestCases } from '../../services/problem-generator';
-import { judgeCode } from '../../services/judge';
+import { getRandomProblems, getProblemUrl, getContestUrl, getDifficultyFromRating, checkUserSolvedProblem, getUserSubmissionsForProblem } from '../../services/codeforces';
 
 const router = Router();
 
@@ -54,62 +53,65 @@ const TOPIC_ALIASES: Record<string, string[]> = {
   sorting: ['sorting'],
 };
 
-async function pickProblem(difficulty: string, topics: string[]): Promise<string | null> {
+async function pickProblem(difficulty: string, topics: string[]): Promise<{ contestId: number; index: string } | null> {
+  // Map difficulty to rating range
+  let minRating: number | undefined;
+  let maxRating: number | undefined;
+  
+  if (difficulty === 'easy') {
+    minRating = 800;
+    maxRating = 1199;
+  } else if (difficulty === 'medium') {
+    minRating = 1200;
+    maxRating = 1599;
+  } else if (difficulty === 'hard') {
+    minRating = 1600;
+    maxRating = 2400;
+  }
+
   // Expand selected topics using aliases
   const expanded = [...new Set(topics.flatMap((t) => TOPIC_ALIASES[t] ?? [t]))];
 
-  // Primary: match difficulty + any of expanded topics + active only
-  const matched = await prisma.problem.findMany({
-    where: { difficulty, topics: { hasSome: expanded }, isActive: true },
-    select: { id: true },
-  });
-  if (matched.length > 0) {
-    return matched[Math.floor(Math.random() * matched.length)].id;
+  try {
+    const problems = await getRandomProblems(1, expanded, minRating, maxRating);
+    if (problems.length > 0) {
+      return { contestId: problems[0].contestId, index: problems[0].index };
+    }
+  } catch (error) {
+    console.error('Error fetching problem from Codeforces:', error);
   }
 
-  // Fallback: only match difficulty + active only
-  const fallback = await prisma.problem.findMany({
-    where: { difficulty, isActive: true },
-    select: { id: true },
-  });
-  if (fallback.length > 0) {
-    return fallback[Math.floor(Math.random() * fallback.length)].id;
+  // Fallback: try without topic filter
+  try {
+    const problems = await getRandomProblems(1, undefined, minRating, maxRating);
+    if (problems.length > 0) {
+      return { contestId: problems[0].contestId, index: problems[0].index };
+    }
+  } catch (error) {
+    console.error('Error fetching problem from Codeforces (fallback):', error);
   }
 
   return null;
 }
 
 const PROBLEM_SELECT = {
-  id: true,
-  title: true,
-  slug: true,
-  difficulty: true,
-  description: true,
-  inputFormat: true,
-  outputFormat: true,
-  examples: true,
-  constraints: true,
-  hints: true,
-  topics: true,
-  timeLimit: true,
-  memoryLimit: true,
-  acceptanceRate: true,
-  problemLink: true,
-  starterCodeCpp: true,
-  starterCodeJava: true,
-  starterCodePython: true,
-  starterCodeJavaScript: true,
+  contestId: true,
+  index: true,
+  name: true,
+  rating: true,
+  tags: true,
+  points: true,
+  type: true,
 };
 
 const BATTLE_INCLUDE = {
-  creator: { select: { id: true, username: true, rating: true, rank: true } },
+  creator: { select: { id: true, codeforcesHandle: true, rating: true, rank: true } },
   players: {
     include: {
-      user: { select: { id: true, username: true, avatar: true, rating: true, rank: true } },
+      user: { select: { id: true, codeforcesHandle: true, avatar: true, rating: true, rank: true } },
     },
     orderBy: { score: 'desc' as const },
   },
-  problem: { select: PROBLEM_SELECT },
 };
 
 // ---------------------------------------------------------------------------
@@ -142,7 +144,7 @@ router.get('/lobby/public', async (req, res, next) => {
       prisma.battle.findMany({
         where: { isPublic: true, status: 'waiting' },
         include: {
-          creator: { select: { id: true, username: true, rating: true } },
+          creator: { select: { id: true, codeforcesHandle: true, rating: true } },
           _count: { select: { players: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -243,28 +245,52 @@ router.post('/:code/start', authenticate, async (req: AuthRequest, res, next) =>
     if (battle.creatorId !== req.user!.id) throw new AppError(403, 'Only the creator can start the battle');
     if (battle.status !== 'waiting') throw new AppError(400, 'Battle has already started');
 
-    const problemId = await pickProblem(battle.difficulty, battle.topics);
-    if (!problemId) {
-      throw new AppError(500, 'No problems found for this difficulty/topic combination. Please ensure the database is seeded.');
+    const problem = await pickProblem(battle.difficulty, battle.topics);
+    if (!problem) {
+      throw new AppError(500, 'No problems found for this difficulty/topic combination from Codeforces.');
     }
 
     const updated = await prisma.battle.update({
       where: { id: battle.id },
       data: {
         status: 'active',
-        problemId,
+        contestId: problem.contestId,
+        problemIndex: problem.index,
         startTime: new Date(),
         endTime: new Date(Date.now() + battle.timeControl * 60 * 1000),
       },
       include: BATTLE_INCLUDE,
     });
 
+    // Fetch problem details from Codeforces
+    const problems = await getRandomProblems(1);
+    const problemDetails = problems.find((p: any) => p.contestId === problem.contestId && p.index === problem.index);
+
     const io = req.app.get('io');
     if (io) {
-      io.to(`battle:${battle.id}`).emit('battle:started', updated);
+      io.to(`battle:${battle.id}`).emit('battle:started', {
+        ...updated,
+        problem: problemDetails ? {
+          ...problemDetails,
+          difficulty: getDifficultyFromRating(problemDetails.rating),
+          url: getProblemUrl(problemDetails.contestId, problemDetails.index),
+          contestUrl: getContestUrl(problemDetails.contestId),
+        } : null,
+      });
     }
 
-    res.json({ success: true, data: updated });
+    res.json({ 
+      success: true, 
+      data: {
+        ...updated,
+        problem: problemDetails ? {
+          ...problemDetails,
+          difficulty: getDifficultyFromRating(problemDetails.rating),
+          url: getProblemUrl(problemDetails.contestId, problemDetails.index),
+          contestUrl: getContestUrl(problemDetails.contestId),
+        } : null,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -338,7 +364,7 @@ router.post('/:code/leave', authenticate, async (req: AuthRequest, res, next) =>
   }
 });
 
-// POST submit solution - REAL JUDGE
+// POST submit solution - tracks submission to Codeforces
 router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const { code } = req.params;
@@ -350,12 +376,12 @@ router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) =
 
     const battle = await prisma.battle.findUnique({
       where: { code: code.toUpperCase() },
-      include: { players: true, problem: true },
+      include: { players: true },
     });
 
     if (!battle) throw new AppError(404, 'Battle not found');
     if (battle.status !== 'active') throw new AppError(400, 'Battle is not active');
-    if (!battle.problemId) throw new AppError(400, 'No problem assigned to this battle');
+    if (!battle.contestId || !battle.problemIndex) throw new AppError(400, 'No problem assigned to this battle');
 
     const player = battle.players.find((p) => p.userId === req.user!.id);
     if (!player) throw new AppError(403, 'You are not a participant in this battle');
@@ -364,142 +390,66 @@ router.post('/:code/submit', authenticate, async (req: AuthRequest, res, next) =
       data: {
         battleId: battle.id,
         userId: req.user!.id,
-        problemId: battle.problemId,
+        contestId: battle.contestId,
+        problemIndex: battle.problemIndex,
         code: submittedCode,
         language,
         status: 'pending',
       },
     });
 
-    // Run judge asynchronously
-    (async () => {
-      try {
-        // Ensure problem test cases are generated
-        await ensureProblemGenerated(battle.problemId!);
-
-        const allCases = await getAllTestCases(battle.problemId!);
-        const problem = await prisma.problem.findUnique({ where: { id: battle.problemId! } });
-
-        const result = await judgeCode(
-          submittedCode,
-          language,
-          allCases.map(tc => ({ input: tc.input, expectedOutput: tc.expectedOutput })),
-          problem?.timeLimit || 5000,
-          problem?.memoryLimit || 256
-        );
-
-        const isAccepted = result.status === 'accepted';
-        const updatedSubmission = await prisma.submission.update({
-          where: { id: submission.id },
-          data: {
-            status: result.status === 'accepted' ? 'accepted' :
-                    result.status === 'compilation_error' ? 'compilation_error' :
-                    result.status === 'time_limit' ? 'time_limit' :
-                    result.status === 'runtime_error' ? 'runtime_error' :
-                    result.status === 'memory_limit' ? 'runtime_error' :
-                    'wrong_answer',
-            runtime: result.totalRuntime,
-            memory: result.peakMemory,
-            score: isAccepted ? 100 : 0,
-          },
-        });
-
-        if (isAccepted) {
-          await prisma.battlePlayer.update({
-            where: { id: player.id },
-            data: { score: { increment: 100 }, problemsSolved: { increment: 1 } },
-          });
-        }
-
-        const updatedPlayers = await prisma.battlePlayer.findMany({
-          where: { battleId: battle.id },
-          include: {
-            user: { select: { id: true, username: true, avatar: true, rating: true, rank: true } },
-          },
-          orderBy: { score: 'desc' },
-        });
-
-        const io = req.app.get('io');
-        if (io) {
-          io.to(`battle:${battle.id}`).emit('submission:result', {
-            submission: updatedSubmission,
-            userId: req.user!.id,
-            username: req.user!.username,
-            players: updatedPlayers,
-          });
-        }
-      } catch (e: any) {
-        console.error('Judge error:', e.message);
-        // Update submission as runtime error
-        try {
-          await prisma.submission.update({
-            where: { id: submission.id },
-            data: { status: 'runtime_error', score: 0 },
-          });
-        } catch {}
-      }
-    })();
-
-    res.json({ success: true, data: { submissionId: submission.id, status: 'pending' } });
+    res.json({ 
+      success: true, 
+      data: { 
+        submissionId: submission.id, 
+        status: 'pending',
+        message: 'Please submit your solution on Codeforces. Your submission will be tracked automatically.',
+        codeforcesUrl: getProblemUrl(battle.contestId, battle.problemIndex),
+      },
+    });
   } catch (error) {
     next(error);
   }
 });
 
-// POST run code - REAL JUDGE
-router.post('/:code/run', authenticate, async (req: AuthRequest, res, next) => {
+// GET check submission status from Codeforces
+router.get('/:code/status', authenticate, async (req: AuthRequest, res, next) => {
   try {
-    const { code: battleCode } = req.params;
-    const { language, code: submittedCode } = req.body;
-
-    if (!submittedCode || !language) {
-      throw new AppError(400, 'Code and language are required');
-    }
+    const { code } = req.params;
 
     const battle = await prisma.battle.findUnique({
-      where: { code: battleCode.toUpperCase() },
-      include: { problem: true },
+      where: { code: code.toUpperCase() },
+      include: { players: true },
     });
 
     if (!battle) throw new AppError(404, 'Battle not found');
-    if (!battle.problem) throw new AppError(400, 'No problem assigned to this battle');
+    if (!battle.contestId || !battle.problemIndex) throw new AppError(400, 'No problem assigned to this battle');
 
-    // Ensure test cases are generated
-    await ensureProblemGenerated(battle.problem.id);
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+    });
 
-    // Get visible test cases (first 3 for Run mode)
-    const visibleCases = await getVisibleTestCases(battle.problem.id);
-    const runCases = visibleCases.slice(0, 3);
+    if (!user) throw new AppError(404, 'User not found');
 
-    if (runCases.length === 0) {
-      throw new AppError(400, 'No test cases available');
-    }
+    // Check if user has solved the problem on Codeforces
+    const hasSolved = await checkUserSolvedProblem(user.codeforcesHandle, battle.contestId, battle.problemIndex);
 
-    const result = await judgeCode(
-      submittedCode,
-      language,
-      runCases.map(tc => ({ input: tc.input, expectedOutput: tc.expectedOutput })),
-      battle.problem.timeLimit,
-      battle.problem.memoryLimit
-    );
-
-    const testResults = result.testResults.map((tr, index) => ({
-      id: index + 1,
-      input: tr.input,
-      expected: tr.expectedOutput,
-      actual: tr.actualOutput,
-      passed: tr.status === 'accepted',
-      status: tr.status,
-      runtime: tr.runtime,
-      explanation: '',
-    }));
+    // Get recent submissions for this problem
+    const submissions = await getUserSubmissionsForProblem(user.codeforcesHandle, battle.contestId, battle.problemIndex, 5);
 
     res.json({
       success: true,
       data: {
-        status: result.status,
-        testCases: testResults,
-        compilationOutput: result.compilationOutput,
+        hasSolved,
+        submissions: submissions.map(sub => ({
+          id: sub.id,
+          verdict: sub.verdict,
+          programmingLanguage: sub.programmingLanguage,
+          timeConsumedMillis: sub.timeConsumedMillis,
+          memoryConsumedBytes: sub.memoryConsumedBytes,
+          creationTimeSeconds: sub.creationTimeSeconds,
+        })),
+        codeforcesUrl: getProblemUrl(battle.contestId, battle.problemIndex),
       },
     });
   } catch (error) {
