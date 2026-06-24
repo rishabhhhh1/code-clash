@@ -59,8 +59,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/room/create">
                 <span className={navClass("/room/create")}>Matchmaking</span>
               </Link>
-              <Link href="/leaderboard">
-                <span className={navClass("/leaderboard")}>Problems</span>
+              <Link href="/problems">
+                <span className={navClass("/problems")}>Problems</span>
               </Link>
               <Link href="/leaderboard">
                 <span className={navClass("/leaderboard")}>Rankings</span>

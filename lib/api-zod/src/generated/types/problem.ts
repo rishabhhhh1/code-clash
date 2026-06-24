@@ -16,4 +16,10 @@ export interface Problem {
   cfUrl: string;
   /** @nullable */
   solvedCount?: number | null;
+  /** @nullable */
+  timeLimit?: number | null;
+  /** @nullable */
+  memoryLimit?: number | null;
+  /** @nullable */
+  solvedByUser?: boolean | null;
 }

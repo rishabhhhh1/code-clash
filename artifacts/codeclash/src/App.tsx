@@ -16,6 +16,8 @@ import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
 import Friends from "@/pages/friends";
 import Achievements from "@/pages/achievements";
+import Problems from "@/pages/problems";
+import ProblemDetail from "@/pages/problem-detail";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,8 @@ function Router() {
             <Route path="/profile/:username" component={Profile} />
             <Route path="/friends" component={Friends} />
             <Route path="/achievements" component={Achievements} />
+            <Route path="/problems/:contestId/:index" component={ProblemDetail} />
+            <Route path="/problems" component={Problems} />
           </Switch>
         </Layout>
       </Route>

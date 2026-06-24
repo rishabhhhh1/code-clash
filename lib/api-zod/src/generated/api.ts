@@ -348,7 +348,10 @@ export const StartBattleResponse = zod.object({
   "rating": zod.number(),
   "tags": zod.array(zod.string()),
   "cfUrl": zod.string(),
-  "solvedCount": zod.number().nullish()
+  "solvedCount": zod.number().nullish(),
+  "timeLimit": zod.number().nullish(),
+  "memoryLimit": zod.number().nullish(),
+  "solvedByUser": zod.boolean().nullish()
 }),
   "participants": zod.array(zod.object({
   "userId": zod.number(),
@@ -433,7 +436,10 @@ export const GetBattleResponse = zod.object({
   "rating": zod.number(),
   "tags": zod.array(zod.string()),
   "cfUrl": zod.string(),
-  "solvedCount": zod.number().nullish()
+  "solvedCount": zod.number().nullish(),
+  "timeLimit": zod.number().nullish(),
+  "memoryLimit": zod.number().nullish(),
+  "solvedByUser": zod.boolean().nullish()
 }),
   "participants": zod.array(zod.object({
   "userId": zod.number(),
@@ -510,17 +516,27 @@ export const RecordSubmissionResponse = zod.object({
 
 
 /**
- * @summary List cached Codeforces problems
+ * @summary List Codeforces problems with search, filter, sort and pagination
  */
-export const listProblemsQueryLimitDefault = 20;
+export const listProblemsQuerySortDefault = `rating`;
+export const listProblemsQueryOrderDefault = `asc`;
+export const listProblemsQueryPageDefault = 1;
+export const listProblemsQueryPageSizeDefault = 50;
 
 export const ListProblemsQueryParams = zod.object({
-  "rating": zod.coerce.number().optional(),
-  "topic": zod.coerce.string().optional(),
-  "limit": zod.coerce.number().default(listProblemsQueryLimitDefault)
+  "search": zod.coerce.string().optional(),
+  "ratingMin": zod.coerce.number().optional(),
+  "ratingMax": zod.coerce.number().optional(),
+  "tag": zod.coerce.string().optional(),
+  "sort": zod.enum(['rating', 'contestId', 'name']).default(listProblemsQuerySortDefault),
+  "order": zod.enum(['asc', 'desc']).default(listProblemsQueryOrderDefault),
+  "page": zod.coerce.number().default(listProblemsQueryPageDefault),
+  "pageSize": zod.coerce.number().default(listProblemsQueryPageSizeDefault),
+  "solved": zod.enum(['true', 'false']).optional()
 })
 
-export const ListProblemsResponseItem = zod.object({
+export const ListProblemsResponse = zod.object({
+  "problems": zod.array(zod.object({
   "id": zod.number(),
   "contestId": zod.number(),
   "problemIndex": zod.string(),
@@ -528,9 +544,16 @@ export const ListProblemsResponseItem = zod.object({
   "rating": zod.number(),
   "tags": zod.array(zod.string()),
   "cfUrl": zod.string(),
-  "solvedCount": zod.number().nullish()
+  "solvedCount": zod.number().nullish(),
+  "timeLimit": zod.number().nullish(),
+  "memoryLimit": zod.number().nullish(),
+  "solvedByUser": zod.boolean().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number(),
+  "totalPages": zod.number()
 })
-export const ListProblemsResponse = zod.array(ListProblemsResponseItem)
 
 
 /**
@@ -549,7 +572,31 @@ export const GetRandomProblemResponse = zod.object({
   "rating": zod.number(),
   "tags": zod.array(zod.string()),
   "cfUrl": zod.string(),
-  "solvedCount": zod.number().nullish()
+  "solvedCount": zod.number().nullish(),
+  "timeLimit": zod.number().nullish(),
+  "memoryLimit": zod.number().nullish(),
+  "solvedByUser": zod.boolean().nullish()
+})
+
+
+/**
+ * @summary Get problems solved by the authenticated user
+ */
+export const GetMySolvedProblemsResponseItem = zod.object({
+  "contestId": zod.number(),
+  "problemIndex": zod.string(),
+  "solvedAt": zod.string()
+})
+export const GetMySolvedProblemsResponse = zod.array(GetMySolvedProblemsResponseItem)
+
+
+/**
+ * @summary Sync solved problems from Codeforces for the authenticated user
+ */
+export const SyncSolvedProblemsResponse = zod.object({
+  "synced": zod.number(),
+  "cfHandle": zod.string(),
+  "message": zod.string()
 })
 
 
@@ -561,6 +608,32 @@ export const FetchCodeforcesProblemsResponse = zod.object({
   "cached": zod.number(),
   "message": zod.string()
 })
+
+
+/**
+ * @summary Get full problem details including cached statement
+ */
+export const GetProblemDetailParams = zod.object({
+  "contestId": zod.coerce.number(),
+  "index": zod.coerce.string()
+})
+
+export const GetProblemDetailResponse = zod.object({
+  "id": zod.number(),
+  "contestId": zod.number(),
+  "problemIndex": zod.string(),
+  "title": zod.string(),
+  "rating": zod.number(),
+  "tags": zod.array(zod.string()),
+  "cfUrl": zod.string(),
+  "solvedCount": zod.number().nullish(),
+  "timeLimit": zod.number().nullish(),
+  "memoryLimit": zod.number().nullish(),
+  "solvedByUser": zod.boolean().nullish()
+}).and(zod.object({
+  "statementHtml": zod.string().nullish(),
+  "statementAvailable": zod.boolean()
+}))
 
 
 /**

@@ -199,6 +199,12 @@ export interface Problem {
   cfUrl: string;
   /** @nullable */
   solvedCount?: number | null;
+  /** @nullable */
+  timeLimit?: number | null;
+  /** @nullable */
+  memoryLimit?: number | null;
+  /** @nullable */
+  solvedByUser?: boolean | null;
 }
 
 export interface BattleParticipantStatus {
@@ -253,6 +259,32 @@ export const SubmissionRecordVerdict = {
 export interface SubmissionRecord {
   cfSubmissionId: number;
   verdict: SubmissionRecordVerdict;
+}
+
+export interface ProblemListResponse {
+  problems: Problem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export type ProblemDetail = Problem & ({
+  /** @nullable */
+  statementHtml?: string | null;
+  statementAvailable: boolean;
+});
+
+export interface SolvedProblemEntry {
+  contestId: number;
+  problemIndex: string;
+  solvedAt: string;
+}
+
+export interface SyncSolvedResult {
+  synced: number;
+  cfHandle: string;
+  message: string;
 }
 
 export interface FetchResult {
@@ -415,10 +447,41 @@ export const ListRoomsStatus = {
 } as const;
 
 export type ListProblemsParams = {
-rating?: number;
-topic?: string;
-limit?: number;
+search?: string;
+ratingMin?: number;
+ratingMax?: number;
+tag?: string;
+sort?: ListProblemsSort;
+order?: ListProblemsOrder;
+page?: number;
+pageSize?: number;
+solved?: ListProblemsSolved;
 };
+
+export type ListProblemsSort = typeof ListProblemsSort[keyof typeof ListProblemsSort];
+
+
+export const ListProblemsSort = {
+  rating: 'rating',
+  contestId: 'contestId',
+  name: 'name',
+} as const;
+
+export type ListProblemsOrder = typeof ListProblemsOrder[keyof typeof ListProblemsOrder];
+
+
+export const ListProblemsOrder = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export type ListProblemsSolved = typeof ListProblemsSolved[keyof typeof ListProblemsSolved];
+
+
+export const ListProblemsSolved = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type GetRandomProblemParams = {
 rating?: number;

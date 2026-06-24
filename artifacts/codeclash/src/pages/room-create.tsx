@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useCreateRoom } from "@workspace/api-client-react";
-import { RoomInputBattleType, RoomInputDifficulty } from "@workspace/api-client-react/src/generated/api.schemas";
+import { RoomInputBattleType, RoomInputDifficulty } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

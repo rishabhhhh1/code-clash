@@ -5,9 +5,18 @@
  * CodeClash - Real-time competitive coding battle platform
  * OpenAPI spec version: 0.1.0
  */
+import type { ListProblemsOrder } from './listProblemsOrder';
+import type { ListProblemsSolved } from './listProblemsSolved';
+import type { ListProblemsSort } from './listProblemsSort';
 
 export type ListProblemsParams = {
-rating?: number;
-topic?: string;
-limit?: number;
+search?: string;
+ratingMin?: number;
+ratingMax?: number;
+tag?: string;
+sort?: ListProblemsSort;
+order?: ListProblemsOrder;
+page?: number;
+pageSize?: number;
+solved?: ListProblemsSolved;
 };

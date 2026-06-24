@@ -43,10 +43,14 @@ import type {
   ListRoomsParams,
   LobbyStats,
   Problem,
+  ProblemDetail,
+  ProblemListResponse,
   Room,
   RoomInput,
   RoomParticipant,
+  SolvedProblemEntry,
   SubmissionRecord,
+  SyncSolvedResult,
   TopPlayers,
   User,
   UserAchievement,
@@ -1419,11 +1423,11 @@ export const getListProblemsUrl = (params?: ListProblemsParams,) => {
 }
 
 /**
- * @summary List cached Codeforces problems
+ * @summary List Codeforces problems with search, filter, sort and pagination
  */
-export const listProblems = async (params?: ListProblemsParams, options?: RequestInit): Promise<Problem[]> => {
+export const listProblems = async (params?: ListProblemsParams, options?: RequestInit): Promise<ProblemListResponse> => {
 
-  return customFetch<Problem[]>(getListProblemsUrl(params),
+  return customFetch<ProblemListResponse>(getListProblemsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1466,7 +1470,7 @@ export type ListProblemsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List cached Codeforces problems
+ * @summary List Codeforces problems with search, filter, sort and pagination
  */
 
 export function useListProblems<TData = Awaited<ReturnType<typeof listProblems>>, TError = ErrorType<unknown>>(
@@ -1571,6 +1575,153 @@ export function useGetRandomProblem<TData = Awaited<ReturnType<typeof getRandomP
 
 
 
+export const getGetMySolvedProblemsUrl = () => {
+
+
+
+
+  return `/api/problems/my-solved`
+}
+
+/**
+ * @summary Get problems solved by the authenticated user
+ */
+export const getMySolvedProblems = async ( options?: RequestInit): Promise<SolvedProblemEntry[]> => {
+
+  return customFetch<SolvedProblemEntry[]>(getGetMySolvedProblemsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMySolvedProblemsQueryKey = () => {
+    return [
+    `/api/problems/my-solved`
+    ] as const;
+    }
+
+
+export const getGetMySolvedProblemsQueryOptions = <TData = Awaited<ReturnType<typeof getMySolvedProblems>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMySolvedProblems>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMySolvedProblemsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMySolvedProblems>>> = ({ signal }) => getMySolvedProblems({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMySolvedProblems>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMySolvedProblemsQueryResult = NonNullable<Awaited<ReturnType<typeof getMySolvedProblems>>>
+export type GetMySolvedProblemsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get problems solved by the authenticated user
+ */
+
+export function useGetMySolvedProblems<TData = Awaited<ReturnType<typeof getMySolvedProblems>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMySolvedProblems>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMySolvedProblemsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSyncSolvedProblemsUrl = () => {
+
+
+
+
+  return `/api/problems/sync-solved`
+}
+
+/**
+ * @summary Sync solved problems from Codeforces for the authenticated user
+ */
+export const syncSolvedProblems = async ( options?: RequestInit): Promise<SyncSolvedResult> => {
+
+  return customFetch<SyncSolvedResult>(getSyncSolvedProblemsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSyncSolvedProblemsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncSolvedProblems>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncSolvedProblems>>, TError,void, TContext> => {
+
+const mutationKey = ['syncSolvedProblems'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncSolvedProblems>>, void> = () => {
+
+
+          return  syncSolvedProblems(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncSolvedProblemsMutationResult = NonNullable<Awaited<ReturnType<typeof syncSolvedProblems>>>
+
+    export type SyncSolvedProblemsMutationError = ErrorType<void>
+
+    /**
+ * @summary Sync solved problems from Codeforces for the authenticated user
+ */
+export const useSyncSolvedProblems = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncSolvedProblems>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncSolvedProblems>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncSolvedProblemsMutationOptions(options));
+    }
+
 export const getFetchCodeforcesProblemsUrl = () => {
 
 
@@ -1640,6 +1791,88 @@ export const useFetchCodeforcesProblems = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getFetchCodeforcesProblemsMutationOptions(options));
     }
+
+export const getGetProblemDetailUrl = (contestId: number,
+    index: string,) => {
+
+
+
+
+  return `/api/problems/${contestId}/${index}`
+}
+
+/**
+ * @summary Get full problem details including cached statement
+ */
+export const getProblemDetail = async (contestId: number,
+    index: string, options?: RequestInit): Promise<ProblemDetail> => {
+
+  return customFetch<ProblemDetail>(getGetProblemDetailUrl(contestId,index),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProblemDetailQueryKey = (contestId: number,
+    index: string,) => {
+    return [
+    `/api/problems/${contestId}/${index}`
+    ] as const;
+    }
+
+
+export const getGetProblemDetailQueryOptions = <TData = Awaited<ReturnType<typeof getProblemDetail>>, TError = ErrorType<void>>(contestId: number,
+    index: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProblemDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProblemDetailQueryKey(contestId,index);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProblemDetail>>> = ({ signal }) => getProblemDetail(contestId,index, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(contestId && index), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProblemDetail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProblemDetailQueryResult = NonNullable<Awaited<ReturnType<typeof getProblemDetail>>>
+export type GetProblemDetailQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get full problem details including cached statement
+ */
+
+export function useGetProblemDetail<TData = Awaited<ReturnType<typeof getProblemDetail>>, TError = ErrorType<void>>(
+ contestId: number,
+    index: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProblemDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProblemDetailQueryOptions(contestId,index,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetGlobalLeaderboardUrl = (params?: GetGlobalLeaderboardParams,) => {
   const normalizedParams = new URLSearchParams();
