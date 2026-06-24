@@ -1,13 +1,24 @@
-import { PrismaClient } from '@prisma/client';
+import mongoose from 'mongoose';
+import { config } from './index';
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+const globalForMongoose = globalThis as unknown as {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+export async function connectDatabase(): Promise<typeof mongoose> {
+  if (globalForMongoose.conn) {
+    return globalForMongoose.conn;
+  }
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+  if (!globalForMongoose.promise) {
+    globalForMongoose.promise = mongoose.connect(config.mongodbUri, {
+      maxPoolSize: 10,
+    });
+  }
 
-export default prisma;
+  globalForMongoose.conn = await globalForMongoose.promise;
+  return globalForMongoose.conn;
+}
+
+export { mongoose };

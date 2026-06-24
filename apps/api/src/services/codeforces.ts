@@ -1,10 +1,17 @@
 import crypto from 'crypto';
+import { config } from '../config';
 
 const CODEFORCES_API_BASE = 'https://codeforces.com/api';
-const API_KEY = process.env.CODEFORCES_API_KEY || '';
-const API_SECRET = process.env.CODEFORCES_API_SECRET || '';
+const API_KEY = config.codeforcesApiKey;
+const API_SECRET = config.codeforcesApiSecret;
 
-interface CodeforcesProblem {
+interface CfResponse<T> {
+  status: string;
+  comment?: string;
+  result?: T;
+}
+
+interface CfProblem {
   contestId: number;
   index: string;
   name: string;
@@ -12,37 +19,74 @@ interface CodeforcesProblem {
   points?: number;
   rating?: number;
   tags: string[];
-  problemsetName?: string;
 }
 
-interface CodeforcesUser {
+interface CfUser {
   handle: string;
-  rating?: number;
-  maxRating?: number;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  country?: string;
+  city?: string;
+  organization?: string;
+  contribution?: number;
   rank?: string;
-  titlePhoto?: string;
+  rating?: number;
+  maxRank?: string;
+  maxRating?: number;
+  lastOnlineTimeSeconds?: number;
+  registrationTimeSeconds?: number;
+  friendOfCount?: number;
   avatar?: string;
+  titlePhoto?: string;
 }
 
-interface CodeforcesSubmission {
+interface CfSubmission {
   id: number;
   contestId: number;
+  creationTimeSeconds: number;
+  relativeTimeSeconds: number;
   problem: {
     contestId: number;
     index: string;
     name: string;
+    type: string;
+    rating?: number;
+    tags: string[];
   };
   author: {
-    participants: Array<{ handle: string }>;
+    contestId?: number;
+    members: Array<{ handle: string }>;
+    participantType: string;
   };
   programmingLanguage: string;
   verdict?: string;
+  testset?: string;
+  passedTestCount: number;
   timeConsumedMillis?: number;
   memoryConsumedBytes?: number;
-  creationTimeSeconds: number;
 }
 
-interface CodeforcesContest {
+interface CfRatingChange {
+  contestId: number;
+  contestName: string;
+  handle: string;
+  rank: number;
+  ratingUpdateTimeSeconds: number;
+  oldRating: number;
+  newRating: number;
+}
+
+interface CfProblemset {
+  problems: CfProblem[];
+  problemStatistics: Array<{
+    contestId: number;
+    index: string;
+    solvedCount: number;
+  }>;
+}
+
+interface CfContest {
   id: number;
   name: string;
   type: string;
@@ -51,13 +95,35 @@ interface CodeforcesContest {
   durationSeconds: number;
   startTimeSeconds?: number;
   relativeTimeSeconds?: number;
-  difficulty?: number;
 }
 
-interface ApiResponse<T> {
-  status: string;
-  comment?: string;
-  result?: T;
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 2000;
+
+interface CacheEntry<T> {
+  data: T;
+  expiry: number;
+}
+
+const cache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+function getCacheKey(method: string, params: Record<string, string>): string {
+  return `${method}:${JSON.stringify(Object.entries(params).sort())}`;
+}
+
+function getFromCache<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache<T>(key: string, data: T): void {
+  cache.set(key, { data, expiry: Date.now() + CACHE_TTL });
 }
 
 function generateApiSig(methodName: string, params: Record<string, string>): string {
@@ -66,177 +132,255 @@ function generateApiSig(methodName: string, params: Record<string, string>): str
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
-  
+
   const data = `${rand}/${methodName}?${sortedParams}#${API_SECRET}`;
   const hash = crypto.createHash('sha512').update(data).digest('hex');
   return rand + hash;
+}
+
+async function rateLimitedFetch(url: string): Promise<Response> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  if (elapsed < MIN_REQUEST_INTERVAL) {
+    await new Promise((r) => setTimeout(r, MIN_REQUEST_INTERVAL - elapsed));
+  }
+  lastRequestTime = Date.now();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if ((error as any)?.name === 'AbortError') {
+      throw new Error('Codeforces API timed out');
+    }
+    throw new Error(`Cannot reach Codeforces API: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 async function callApi<T>(
   methodName: string,
   params: Record<string, string> = {},
   requireAuth = false
-): Promise<ApiResponse<T>> {
+): Promise<T> {
+  const cacheKey = getCacheKey(methodName, params);
+  const cached = getFromCache<T>(cacheKey);
+  if (cached !== null) return cached;
+
   const url = new URL(`${CODEFORCES_API_BASE}/${methodName}`);
-  
+
   if (requireAuth && API_KEY && API_SECRET) {
     const time = Math.floor(Date.now() / 1000);
-    const authParams = {
-      ...params,
-      apiKey: API_KEY,
-      time: time.toString(),
-    };
+    const authParams = { ...params, apiKey: API_KEY, time: time.toString() };
     const apiSig = generateApiSig(methodName, authParams);
-    
-    Object.entries(authParams).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
-    });
+    Object.entries(authParams).forEach(([key, value]) => url.searchParams.append(key, value));
     url.searchParams.append('apiSig', apiSig);
   } else {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
-    });
+    Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
   }
-
-  // Fetch with a 10-second timeout so network failures surface quickly
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   let response: Response;
   try {
-    response = await fetch(url.toString(), { signal: controller.signal });
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if ((error as any)?.name === 'AbortError') {
-      throw new Error('Codeforces API timed out. Please try again.');
-    }
-    throw new Error(`Cannot reach Codeforces API: ${error instanceof Error ? error.message : 'Unknown network error'}`);
+    response = await rateLimitedFetch(url.toString());
+  } catch {
+    throw new Error('Codeforces API is unreachable');
   }
-  clearTimeout(timeoutId);
 
-  // Handle rate-limiting gracefully
   if (response.status === 429) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((r) => setTimeout(r, 2000));
     return callApi<T>(methodName, params, requireAuth);
   }
 
-  let data: ApiResponse<T>;
+  let data: CfResponse<T>;
   try {
-    data = await response.json() as ApiResponse<T>;
+    data = await response.json() as CfResponse<T>;
   } catch {
-    throw new Error('Codeforces API returned an invalid response.');
+    throw new Error('Codeforces API returned invalid JSON');
   }
 
-  // Throw the Codeforces comment directly so callers can inspect it
   if (data.status !== 'OK') {
     throw new Error(data.comment || 'Codeforces API request failed');
   }
 
-  return data;
+  setCache(cacheKey, data.result!);
+  return data.result!;
 }
 
-export async function getUserInfo(handle: string): Promise<CodeforcesUser> {
-  const response = await callApi<CodeforcesUser[]>('user.info', { handles: handle });
-  if (!response.result || response.result.length === 0) {
+export async function fetchUserInfo(handle: string): Promise<CfUser> {
+  const result = await callApi<CfUser[]>('user.info', { handles: handle });
+  if (!result || result.length === 0) {
     throw new Error(`User ${handle} not found on Codeforces`);
   }
-  return response.result[0];
+  return result[0];
 }
 
-export async function getUserRating(handle: string): Promise<Array<{ contestId: number; contestName: string; rank: number; ratingUpdateTimeSeconds: number; oldRating: number; newRating: number }>> {
-  const response = await callApi<Array<{ contestId: number; contestName: string; rank: number; ratingUpdateTimeSeconds: number; oldRating: number; newRating: number }>>('user.rating', { handle });
-  return response.result || [];
+export async function getUserInfo(handle: string): Promise<CfUser> {
+  return fetchUserInfo(handle);
 }
 
-export async function getUserStatus(handle: string, count = 10): Promise<CodeforcesSubmission[]> {
-  const response = await callApi<CodeforcesSubmission[]>('user.status', { handle, count: count.toString() });
-  return response.result || [];
+export async function getUserRating(handle: string): Promise<CfRatingChange[]> {
+  return callApi<CfRatingChange[]>('user.rating', { handle });
 }
 
-export async function getProblemset(tags?: string[]): Promise<{ problems: CodeforcesProblem[] }> {
+export function getUserProfileUrl(handle: string): string {
+  return `https://codeforces.com/profile/${encodeURIComponent(handle)}`;
+}
+
+export async function fetchProblems(
+  tags?: string[],
+  minRating?: number,
+  maxRating?: number
+): Promise<CfProblem[]> {
   const params: Record<string, string> = {};
   if (tags && tags.length > 0) {
     params.tags = tags.join(';');
   }
-  
-  const response = await callApi<{ problems: CodeforcesProblem[]; problemStatistics: any[] }>('problemset.problems', params);
-  return { problems: response.result?.problems || [] };
-}
 
-export async function getContestList(gym = false): Promise<CodeforcesContest[]> {
-  const response = await callApi<CodeforcesContest[]>('contest.list', gym ? { gym: 'true' } : {});
-  return response.result || [];
-}
+  const result = await callApi<{ problems: CfProblem[]; problemStatistics: any[] }>(
+    'problemset.problems',
+    params
+  );
 
-export async function getContestStandings(contestId: number): Promise<any> {
-  const response = await callApi('contest.standings', { contestId: contestId.toString() });
-  return response.result;
-}
+  let problems = result?.problems || [];
 
-export async function getContestProblems(contestId: number): Promise<CodeforcesProblem[]> {
-  const standings = await getContestStandings(contestId);
-  return standings?.problems || [];
-}
-
-export async function getRandomProblems(count = 5, tags?: string[], minRating?: number, maxRating?: number): Promise<CodeforcesProblem[]> {
-  const { problems } = await getProblemset(tags);
-  
-  let filtered = problems;
   if (minRating !== undefined) {
-    filtered = filtered.filter(p => (p.rating || 0) >= minRating);
+    problems = problems.filter((p) => (p.rating || 0) >= minRating);
   }
   if (maxRating !== undefined) {
-    filtered = filtered.filter(p => (p.rating || 0) <= maxRating);
+    problems = problems.filter((p) => (p.rating || 0) <= maxRating);
   }
-  
-  // Shuffle and take count
-  const shuffled = filtered.sort(() => Math.random() - 0.5);
+
+  return problems;
+}
+
+export async function getProblemset(tags?: string[]): Promise<CfProblemset> {
+  const params: Record<string, string> = {};
+  if (tags && tags.length > 0) {
+    params.tags = tags.join(';');
+  }
+
+  return callApi<CfProblemset>('problemset.problems', params);
+}
+
+export async function fetchRandomProblems(
+  count: number,
+  tags?: string[],
+  minRating?: number,
+  maxRating?: number
+): Promise<CfProblem[]> {
+  const problems = await fetchProblems(tags, minRating, maxRating);
+  const shuffled = [...problems].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
 
+export async function getRandomProblems(
+  count: number,
+  tags?: string[],
+  minRating?: number,
+  maxRating?: number
+): Promise<CfProblem[]> {
+  const problems = await fetchProblems(tags, minRating, maxRating);
+  const publicProblems = problems.filter((p) => Number.isInteger(p.contestId) && p.index);
+  const shuffled = [...publicProblems].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+export async function fetchUserSubmissions(
+  handle: string,
+  from?: number,
+  count?: number
+): Promise<CfSubmission[]> {
+  const params: Record<string, string> = { handle };
+  if (from !== undefined) params.from = from.toString();
+  if (count !== undefined) params.count = count.toString();
+  return callApi<CfSubmission[]>('user.status', params);
+}
+
+export async function getUserSubmissionsForProblem(
+  handle: string,
+  contestId: number,
+  index: string,
+  count = 20
+): Promise<CfSubmission[]> {
+  const submissions = await fetchUserSubmissions(handle, 1, Math.max(count, 20));
+  return submissions
+    .filter((submission) => (
+      submission.problem.contestId === contestId &&
+      submission.problem.index.toUpperCase() === index.toUpperCase()
+    ))
+    .slice(0, count);
+}
+
+export async function checkUserSolvedProblem(
+  handle: string,
+  contestId: number,
+  index: string,
+  sinceSeconds?: number
+): Promise<CfSubmission | null> {
+  const submissions = await fetchUserSubmissions(handle, 1, 100);
+  return submissions.find((submission) => (
+    submission.problem.contestId === contestId &&
+    submission.problem.index.toUpperCase() === index.toUpperCase() &&
+    submission.verdict === 'OK' &&
+    (!sinceSeconds || submission.creationTimeSeconds >= sinceSeconds)
+  )) || null;
+}
+
+export async function checkSubmission(
+  runId: number,
+  contestId: number,
+  handle: string
+): Promise<CfSubmission | null> {
+  try {
+    const submissions = await fetchUserSubmissions(handle, 1, 100);
+    return (
+      submissions.find(
+        (s) => s.id === runId && s.contestId === contestId
+      ) || null
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchContestList(): Promise<CfContest[]> {
+  return callApi<CfContest[]>('contest.list');
+}
+
+export async function getContestList(includeGym = false): Promise<CfContest[]> {
+  const contests = await fetchContestList();
+  return includeGym ? contests : contests.filter((contest) => contest.type !== 'GYM');
+}
+
+export async function fetchProblemDetail(
+  contestId: number,
+  index: string
+): Promise<CfProblem | null> {
+  try {
+    const params: Record<string, string> = { contestId: contestId.toString() };
+    const result = await callApi<{ problems: CfProblem[] }>('contest.standings', params);
+    return result?.problems?.find((p) => p.index === index) || null;
+  } catch {
+    return null;
+  }
+}
+
 export function getProblemUrl(contestId: number, index: string): string {
-  return `https://codeforces.com/contest/${contestId}/problem/${index}`;
+  return `https://codeforces.com/problemset/problem/${contestId}/${encodeURIComponent(index)}`;
 }
 
 export function getContestUrl(contestId: number): string {
   return `https://codeforces.com/contest/${contestId}`;
 }
 
-export function getUserProfileUrl(handle: string): string {
-  return `https://codeforces.com/profile/${handle}`;
+export function getDifficultyFromRating(rating?: number): 'easy' | 'medium' | 'hard' {
+  if (!rating || rating < 1200) return 'easy';
+  if (rating < 1700) return 'medium';
+  return 'hard';
 }
 
-export function getDifficultyFromRating(rating?: number): string {
-  if (!rating) return 'unknown';
-  if (rating < 1200) return 'easy';
-  if (rating < 1600) return 'medium';
-  if (rating < 2000) return 'hard';
-  return 'expert';
-}
-
-export async function checkUserSolvedProblem(handle: string, contestId: number, problemIndex: string): Promise<boolean> {
-  try {
-    const submissions = await getUserStatus(handle, 50);
-    return submissions.some(sub => 
-      sub.problem.contestId === contestId && 
-      sub.problem.index === problemIndex && 
-      sub.verdict === 'OK'
-    );
-  } catch (error) {
-    console.error('Error checking user solved status:', error);
-    return false;
-  }
-}
-
-export async function getUserSubmissionsForProblem(handle: string, contestId: number, problemIndex: string, count = 10) {
-  try {
-    const submissions = await getUserStatus(handle, count);
-    return submissions.filter(sub => 
-      sub.problem.contestId === contestId && 
-      sub.problem.index === problemIndex
-    );
-  } catch (error) {
-    console.error('Error fetching user submissions for problem:', error);
-    return [];
-  }
-}
+export type { CfUser, CfProblem, CfSubmission, CfContest, CfRatingChange, CfProblemset };

@@ -2,51 +2,17 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const config = {
-  port: parseInt(process.env.PORT || '3001', 10),
+  port: parseInt(process.env.PORT || '3001'),
   nodeEnv: process.env.NODE_ENV || 'development',
-  
-  // Database
-  databaseUrl: process.env.DATABASE_URL!,
-  
-  // Redis
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
-  
-  // JWT
-  jwtSecret: process.env.JWT_SECRET || 'dev-jwt-secret',
+  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/codeclash',
+  jwtSecret: process.env.JWT_SECRET || 'dev-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  
-  // OAuth - Google
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID || '',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/callback/google',
-  },
-  
-  // OAuth - GitHub
-  github: {
-    clientId: process.env.GITHUB_CLIENT_ID || '',
-    clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
-    callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3000/auth/callback/github',
-  },
-  
-  // App URLs
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  codeforcesApiKey: process.env.CODEFORCES_API_KEY || '',
+  codeforcesApiSecret: process.env.CODEFORCES_API_SECRET || '',
+  frontendUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-  
-  // Judge
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   judgeDockerImage: process.env.JUDGE_DOCKER_IMAGE || 'codeclash-judge:latest',
-  judgeTimeoutMs: parseInt(process.env.JUDGE_TIMEOUT_MS || '10000', 10),
-  judgeMemoryLimitMb: parseInt(process.env.JUDGE_MEMORY_LIMIT_MB || '256', 10),
-  
-  // AI - OpenAI
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
-  openaiModel: process.env.OPENAI_MODEL || 'gpt-4o',
-  openaiBaseUrl: process.env.OPENAI_BASE_URL || undefined,
-  
-  // Test case generation limits per difficulty (visible + hidden = total minimum)
-  testCasesPerDifficulty: {
-    easy:   { visible: 10,  hidden: 90,  total: 100 },
-    medium: { visible: 20,  hidden: 280, total: 300 },
-    hard:   { visible: 30,  hidden: 470, total: 500 },
-  },
+  judgeTimeoutMs: parseInt(process.env.JUDGE_TIMEOUT_MS || '10000'),
+  judgeMemoryLimitMb: parseInt(process.env.JUDGE_MEMORY_LIMIT_MB || '256'),
 };

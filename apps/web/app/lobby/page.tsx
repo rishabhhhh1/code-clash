@@ -15,7 +15,7 @@ interface Battle {
   isPublic: boolean;
   creator: {
     id: string;
-    username: string;
+    codeforcesHandle: string;
     rating: number;
   };
   createdAt: string;
@@ -160,7 +160,7 @@ export default function LobbyPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-lg font-bold">{battle.code}</span>
-                      <span className="text-sm text-muted-foreground">by {battle.creator.username}</span>
+                      <span className="text-sm text-muted-foreground">by {battle.creator.codeforcesHandle}</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                       <span className="font-medium">{getModeName(battle.mode)}</span>

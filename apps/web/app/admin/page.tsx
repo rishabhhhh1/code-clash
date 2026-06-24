@@ -536,11 +536,13 @@ export default function AdminPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border rounded-lg p-4">
       <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value.toLocaleString()}</div>
+      <div className="text-2xl font-bold mt-1">
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
     </div>
   );
 }

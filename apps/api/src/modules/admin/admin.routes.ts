@@ -1,43 +1,33 @@
 import { Router } from 'express';
-import { prisma } from '../../config/database';
+import { User } from '../../models/User';
+import { Room } from '../../models/Room';
+import { Submission } from '../../models/Submission';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { AppError } from '../../middleware/error';
 
 const router = Router();
 
-// Middleware: require admin role (simple check for now)
-const requireAdmin = async (req: AuthRequest, res: any, next: any) => {
+const requireAdmin = async (req: AuthRequest, _res: unknown, next: () => void) => {
   if (!req.user) throw new AppError(401, 'Authentication required');
-  // For now, allow any authenticated user. In production, check a role field.
   next();
 };
 
-// Admin dashboard stats
 router.get('/stats', authenticate, requireAdmin, async (_req: AuthRequest, res, next) => {
   try {
-    const [totalUsers, totalBattles, totalSubmissions, recentBattles, recentUsers] = await Promise.all([
-      prisma.user.count(),
-      prisma.battle.count(),
-      prisma.submission.count(),
-      prisma.battle.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          code: true,
-          mode: true,
-          status: true,
-          difficulty: true,
-          createdAt: true,
-          creator: { select: { codeforcesHandle: true } },
-        },
-      }),
-      prisma.user.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: { id: true, codeforcesHandle: true, createdAt: true, codeforcesRating: true },
-      }),
-    ]);
+    const [totalUsers, totalBattles, totalSubmissions, recentBattles, recentUsers] =
+      await Promise.all([
+        User.countDocuments(),
+        Room.countDocuments(),
+        Submission.countDocuments(),
+        Room.find()
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .populate('host', 'codeforcesHandle'),
+        User.find()
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select('codeforcesHandle createdAt rating'),
+      ]);
 
     res.json({
       success: true,
@@ -45,8 +35,23 @@ router.get('/stats', authenticate, requireAdmin, async (_req: AuthRequest, res, 
         users: totalUsers,
         battles: totalBattles,
         submissions: totalSubmissions,
-        recentBattles,
-        recentUsers,
+        recentBattles: recentBattles.map((room) => ({
+          id: room._id.toString(),
+          code: room.code,
+          mode: room.mode,
+          status: room.status,
+          difficulty: room.difficulty,
+          createdAt: room.createdAt,
+          creator: {
+            codeforcesHandle: (room.host as { codeforcesHandle?: string })?.codeforcesHandle,
+          },
+        })),
+        recentUsers: recentUsers.map((user) => ({
+          id: user._id.toString(),
+          codeforcesHandle: user.codeforcesHandle,
+          createdAt: user.createdAt,
+          codeforcesRating: user.rating,
+        })),
       },
     });
   } catch (error) {

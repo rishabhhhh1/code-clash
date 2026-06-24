@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config';
-import { prisma } from './config/database';
+import { connectDatabase } from './config/database';
 import { errorHandler, notFound } from './middleware/error';
 import { authRouter } from './modules/auth/auth.routes';
 import { usersRouter } from './modules/users/users.routes';
@@ -112,8 +112,8 @@ app.use(errorHandler);
 // Start server
 async function start() {
   try {
-    await prisma.$connect();
-    console.log('Database connected');
+    await connectDatabase();
+    console.log('MongoDB connected');
 
     httpServer.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);

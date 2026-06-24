@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/error';
 import {
   getProblemset,
@@ -15,34 +14,51 @@ const router = Router();
 // Get problems list with search, difficulty, topic filters
 router.get('/', async (req, res, next) => {
   try {
-    const { tags, minRating, maxRating } = req.query;
+    const { tags, minRating, maxRating, limit: limitStr, page: pageStr, search } = req.query;
 
-    const tagList = tags ? (tags as string).split(',').map(t => t.trim()) : undefined;
+    const tagList = tags ? (tags as string).split(',').map((t) => t.trim()) : undefined;
     const minR = minRating ? parseInt(minRating as string) : undefined;
     const maxR = maxRating ? parseInt(maxRating as string) : undefined;
+    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 100));
+    const page = Math.max(1, parseInt(pageStr as string) || 1);
 
     const { problems } = await getProblemset(tagList);
 
     let filtered = problems;
     if (minR !== undefined) {
-      filtered = filtered.filter(p => (p.rating || 0) >= minR);
+      filtered = filtered.filter((p) => (p.rating || 0) >= minR);
     }
     if (maxR !== undefined) {
-      filtered = filtered.filter(p => (p.rating || 0) <= maxR);
+      filtered = filtered.filter((p) => (p.rating || 0) <= maxR);
+    }
+    if (search && typeof search === 'string') {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          `${p.contestId}${p.index}`.toLowerCase().includes(q)
+      );
     }
 
-    // Add difficulty field based on rating
-    const problemsWithDifficulty = filtered.map(p => ({
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const pageItems = filtered.slice(start, start + limit);
+
+    const problemsWithDifficulty = pageItems.map((p) => ({
       ...p,
       difficulty: getDifficultyFromRating(p.rating),
       url: getProblemUrl(p.contestId, p.index),
+      contestUrl: getContestUrl(p.contestId),
     }));
 
     res.json({
       success: true,
       data: {
         items: problemsWithDifficulty,
-        total: problemsWithDifficulty.length,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {

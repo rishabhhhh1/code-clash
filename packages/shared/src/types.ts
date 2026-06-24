@@ -1,150 +1,199 @@
-// Rank types
-export type Rank = 
-  | 'bronze' 
-  | 'silver' 
-  | 'gold' 
-  | 'platinum' 
-  | 'diamond' 
-  | 'master' 
-  | 'grandmaster' 
-  | 'legend';
+export type Rank =
+  | 'newbie'
+  | 'pupil'
+  | 'specialist'
+  | 'expert'
+  | 'candidate_master'
+  | 'master'
+  | 'international_master'
+  | 'grandmaster'
+  | 'international_grandmaster'
+  | 'legendary_grandmaster';
 
-// Difficulty levels
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type BattleMode =
+  | '1v1_duel'
+  | 'ranked_duel'
+  | 'unranked_duel'
+  | 'deathmatch'
+  | 'multiplayer'
+  | 'public_room'
+  | 'private_room'
+  | 'topic_battle'
+  | 'battle_royale'
+  | 'arena';
 
-// Battle modes
-export type BattleMode = 
-  | 'deathmatch' 
-  | 'royal' 
-  | 'bestof3' 
-  | 'survival' 
-  | 'speedrun' 
-  | 'topicdraft' 
-  | 'chaos';
+export type BattleStatus =
+  | 'waiting'
+  | 'starting'
+  | 'active'
+  | 'completed'
+  | 'cancelled';
 
-// Battle status
-export type BattleStatus = 'waiting' | 'active' | 'completed' | 'cancelled';
+export type PlayerStatus =
+  | 'waiting'
+  | 'ready'
+  | 'playing'
+  | 'solved'
+  | 'eliminated'
+  | 'disconnected';
 
-// Submission status
-export type SubmissionStatus = 
-  | 'pending' 
-  | 'accepted' 
-  | 'wrong_answer' 
-  | 'time_limit' 
-  | 'runtime_error' 
-  | 'compilation_error';
+export type SubmissionVerdict =
+  | 'accepted'
+  | 'wrong_answer'
+  | 'runtime_error'
+  | 'compile_error'
+  | 'time_limit_exceeded'
+  | 'memory_limit_exceeded'
+  | 'pending'
+  | 'judging';
 
-// Programming languages
 export type Language = 'cpp' | 'java' | 'python' | 'javascript';
 
-// Problem topics
-export type Topic = 
-  | 'arrays'
-  | 'strings'
-  | 'linked_lists'
-  | 'stacks'
-  | 'queues'
-  | 'heaps'
-  | 'binary_search'
-  | 'sliding_window'
-  | 'greedy'
-  | 'dynamic_programming'
-  | 'trees'
-  | 'graphs'
-  | 'backtracking'
-  | 'bit_manipulation'
-  | 'math'
-  | 'intervals'
-  | 'two_pointers'
-  | 'hash_map'
-  | 'recursion'
-  | 'depth_first_search'
-  | 'breadth_first_search'
-  | 'monotonic_stack'
-  | 'prefix_sum'
-  | 'topological_sort'
-  | 'design'
-  | 'divide_and_conquer'
-  | 'sorting';
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
-// Time control options (in minutes)
-export type TimeControl = 5 | 10 | 15 | 30 | 45 | 60 | number;
+export const TOPICS = [
+  'binary_search',
+  'graphs',
+  'trees',
+  'dynamic_programming',
+  'greedy',
+  'strings',
+  'math',
+  'number_theory',
+  'sliding_window',
+  'bitmask',
+  'two_pointers',
+  'bfs',
+  'dfs',
+  'sorting',
+  'hashing',
+  'stack',
+  'queue',
+  'heap',
+  'trie',
+  'segment_tree',
+  'divide_and_conquer',
+  'backtracking',
+  'union_find',
+  'geometry',
+  'combinatorics',
+  'game_theory',
+] as const;
 
-// Rank thresholds
-export const RANK_THRESHOLDS: Record<Rank, number> = {
-  bronze: 0,
-  silver: 1000,
-  gold: 1500,
-  platinum: 2000,
-  diamond: 2500,
-  master: 3000,
-  grandmaster: 3500,
-  legend: 4000,
-};
+export type Topic = (typeof TOPICS)[number];
 
-// Rank display names
-export const RANK_NAMES: Record<Rank, string> = {
-  bronze: 'Bronze',
-  silver: 'Silver',
-  gold: 'Gold',
-  platinum: 'Platinum',
-  diamond: 'Diamond',
-  master: 'Master',
-  grandmaster: 'Grandmaster',
-  legend: 'Legend',
-};
-
-// Difficulty display names
-export const DIFFICULTY_NAMES: Record<Difficulty, string> = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-};
-
-// Battle mode display names
-export const BATTLE_MODE_NAMES: Record<BattleMode, string> = {
-  deathmatch: 'Deathmatch',
-  royal: 'Battle Royale',
-  bestof3: 'Best of 3',
-  survival: 'Survival',
-  speedrun: 'Speedrun',
-  topicdraft: 'Topic Draft',
-  chaos: 'Chaos',
-};
-
-// Topic display names
-export const TOPIC_NAMES: Record<Topic, string> = {
-  arrays: 'Arrays',
-  strings: 'Strings',
-  linked_lists: 'Linked Lists',
-  stacks: 'Stacks',
-  queues: 'Queues',
-  heaps: 'Heaps',
+export const TOPIC_LABELS: Record<Topic, string> = {
   binary_search: 'Binary Search',
-  sliding_window: 'Sliding Window',
-  greedy: 'Greedy',
-  dynamic_programming: 'Dynamic Programming',
-  trees: 'Trees',
   graphs: 'Graphs',
-  backtracking: 'Backtracking',
-  bit_manipulation: 'Bit Manipulation',
+  trees: 'Trees',
+  dynamic_programming: 'Dynamic Programming',
+  greedy: 'Greedy',
+  strings: 'Strings',
   math: 'Math',
-  intervals: 'Intervals',
+  number_theory: 'Number Theory',
+  sliding_window: 'Sliding Window',
+  bitmask: 'Bitmask',
   two_pointers: 'Two Pointers',
-  hash_map: 'Hash Map',
-  recursion: 'Recursion',
-  depth_first_search: 'Depth First Search',
-  breadth_first_search: 'Breadth First Search',
-  monotonic_stack: 'Monotonic Stack',
-  prefix_sum: 'Prefix Sum',
-  topological_sort: 'Topological Sort',
-  design: 'Design',
-  divide_and_conquer: 'Divide and Conquer',
+  bfs: 'BFS',
+  dfs: 'DFS',
   sorting: 'Sorting',
+  hashing: 'Hashing',
+  stack: 'Stack',
+  queue: 'Queue',
+  heap: 'Heap',
+  trie: 'Trie',
+  segment_tree: 'Segment Tree',
+  divide_and_conquer: 'Divide and Conquer',
+  backtracking: 'Backtracking',
+  union_find: 'Union Find',
+  geometry: 'Geometry',
+  combinatorics: 'Combinatorics',
+  game_theory: 'Game Theory',
 };
 
-// Player count options
-export const PLAYER_COUNT_OPTIONS = [2, 4, 10, 25, 50, 100] as const;
+export const RANK_THRESHOLDS: Record<Rank, { min: number; max: number }> = {
+  newbie: { min: 0, max: 1199 },
+  pupil: { min: 1200, max: 1399 },
+  specialist: { min: 1400, max: 1599 },
+  expert: { min: 1600, max: 1899 },
+  candidate_master: { min: 1900, max: 2099 },
+  master: { min: 2100, max: 2299 },
+  international_master: { min: 2300, max: 2399 },
+  grandmaster: { min: 2400, max: 2599 },
+  international_grandmaster: { min: 2600, max: 2899 },
+  legendary_grandmaster: { min: 2900, max: 5000 },
+};
 
-// Time control options
-export const TIME_CONTROL_OPTIONS = [5, 10, 15, 30, 45, 60] as const;
+export const RANK_LABELS: Record<Rank, string> = {
+  newbie: 'Newbie',
+  pupil: 'Pupil',
+  specialist: 'Specialist',
+  expert: 'Expert',
+  candidate_master: 'Candidate Master',
+  master: 'Master',
+  international_master: 'International Master',
+  grandmaster: 'Grandmaster',
+  international_grandmaster: 'International Grandmaster',
+  legendary_grandmaster: 'Legendary Grandmaster',
+};
+
+export const RANK_COLORS: Record<Rank, string> = {
+  newbie: '#808080',
+  pupil: '#008000',
+  specialist: '#03a89e',
+  expert: '#0000ff',
+  candidate_master: '#aa00aa',
+  master: '#ff8c00',
+  international_master: '#ff8c00',
+  grandmaster: '#ff0000',
+  international_grandmaster: '#ff0000',
+  legendary_grandmaster: '#ff0000',
+};
+
+export function getRankFromRating(rating: number): Rank {
+  if (rating >= 2900) return 'legendary_grandmaster';
+  if (rating >= 2600) return 'international_grandmaster';
+  if (rating >= 2400) return 'grandmaster';
+  if (rating >= 2300) return 'international_master';
+  if (rating >= 2100) return 'master';
+  if (rating >= 1900) return 'candidate_master';
+  if (rating >= 1600) return 'expert';
+  if (rating >= 1400) return 'specialist';
+  if (rating >= 1200) return 'pupil';
+  return 'newbie';
+}
+
+export function getMatchmakingRange(rating: number): { min: number; max: number } {
+  const range = 200;
+  return { min: Math.max(0, rating - range), max: rating + range };
+}
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface SocketEvents {
+  'room:join': (data: { roomCode: string }) => void;
+  'room:leave': (data: { roomCode: string }) => void;
+  'room:ready': (data: { roomCode: string }) => void;
+  'room:unready': (data: { roomCode: string }) => void;
+  'room:start': (data: { roomCode: string }) => void;
+  'room:approve': (data: { roomCode: string; userId: string }) => void;
+  'room:reject': (data: { roomCode: string; userId: string }) => void;
+  'battle:submit': (data: { roomCode: string; problemIndex: number; contestId: number; language: Language }) => void;
+  'chat:message': (data: { roomCode: string; message: string }) => void;
+  'spectator:join': (data: { roomCode: string }) => void;
+  'spectator:leave': (data: { roomCode: string }) => void;
+  'lobby:subscribe': () => void;
+  'lobby:unsubscribe': () => void;
+}

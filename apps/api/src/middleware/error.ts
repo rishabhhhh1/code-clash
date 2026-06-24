@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 
 export class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-    public isOperational = true
-  ) {
+  public statusCode: number;
+  public isOperational: boolean;
+
+  constructor(statusCode: number, message: string, isOperational = true) {
     super(message);
+    this.statusCode = statusCode;
+    this.isOperational = isOperational;
     Object.setPrototypeOf(this, AppError.prototype);
   }
 }
@@ -15,9 +16,9 @@ export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
-  console.error('Error:', err);
+  console.error('Error:', err.message);
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -33,9 +34,17 @@ export const errorHandler = (
   });
 };
 
+export const asyncHandler = (
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next);
+  };
+};
+
 export const notFound = (req: Request, res: Response): void => {
   res.status(404).json({
     success: false,
-    error: `Route ${req.originalUrl} not found`,
+    error: `Route ${req.method} ${req.originalUrl} not found`,
   });
 };
