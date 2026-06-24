@@ -1,13 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetRoom, getGetRoomQueryKey, useJoinRoom, useSetReady, useStartBattle } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Copy, CheckCircle2, Play, Loader2 } from "lucide-react";
+import { Copy, Check, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function RoomView() {
@@ -22,7 +21,7 @@ export default function RoomView() {
     query: {
       enabled: !!roomCode,
       queryKey: getGetRoomQueryKey(roomCode!),
-      refetchInterval: 3000 // Poll for updates
+      refetchInterval: 3000
     }
   });
 
@@ -34,7 +33,6 @@ export default function RoomView() {
   const isParticipant = room?.participants?.some(p => p.userId === user?.id);
   const me = room?.participants?.find(p => p.userId === user?.id);
 
-  // Auto-redirect when battle starts
   useEffect(() => {
     if (room?.status === 'active' && room.battleId) {
       setLocation(`/battle/${room.battleId}`);
@@ -80,90 +78,98 @@ export default function RoomView() {
     toast({ title: "Copied to clipboard" });
   };
 
-  if (isLoading) return <div className="p-8"><Skeleton className="h-64 w-full" /></div>;
+  if (isLoading) return <div className="p-8 max-w-3xl mx-auto"><Skeleton className="h-64 w-full" /></div>;
   if (!room) return <div className="p-8 text-center text-muted-foreground">Room not found</div>;
 
   const nonHostParticipants = room.participants?.filter(p => !p.isHost) ?? [];
   const allReady = nonHostParticipants.length > 0 && nonHostParticipants.every(p => p.isReady);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="max-w-3xl mx-auto py-8 space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-border">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">Arena {room.roomCode}</h1>
-            <Badge variant="outline" className="border-primary text-primary">{room.battleType.toUpperCase()}</Badge>
-            <Badge>{room.difficulty.toUpperCase()}</Badge>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            Room <span className="font-mono text-primary">{room.roomCode}</span>
+          </h1>
+          <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Host: {room.hostUsername}</span>
+            <span>•</span>
+            <span className="uppercase">{room.battleType.replace('_', ' ')}</span>
+            <span>•</span>
+            <span className="capitalize">{room.difficulty}</span>
           </div>
-          <p className="text-muted-foreground mt-1">Host: {room.hostUsername}</p>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={copyInvite}>
-            <Copy className="w-4 h-4 mr-2" /> Invite Link
+        <div className="flex gap-3 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={copyInvite} className="flex-1 sm:flex-none">
+            <Copy className="w-3 h-3 mr-2" /> Invite
           </Button>
           {!isParticipant && (
-            <Button onClick={handleJoin} disabled={joinMutation.isPending}>
-              {joinMutation.isPending ? "Joining..." : "Join Arena"}
+            <Button size="sm" onClick={handleJoin} disabled={joinMutation.isPending} className="flex-1 sm:flex-none">
+              {joinMutation.isPending ? "Joining..." : "Join"}
             </Button>
           )}
           {isParticipant && !isHost && (
             <Button 
-              variant={me?.isReady ? "secondary" : "default"} 
+              size="sm"
+              variant={me?.isReady ? "outline" : "default"} 
               onClick={handleReady}
               disabled={readyMutation.isPending}
+              className="flex-1 sm:flex-none"
             >
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              {me?.isReady ? "Ready" : "Click to Ready"}
+              {me?.isReady ? "Ready" : "Mark Ready"}
             </Button>
           )}
           {isHost && (
             <Button 
-              className="bg-accent hover:bg-accent/90" 
+              size="sm"
               onClick={handleStart}
               disabled={!allReady || startMutation.isPending}
+              className="flex-1 sm:flex-none"
             >
-              <Play className="w-4 h-4 mr-2" />
               Start Battle
             </Button>
           )}
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Participants ({room.participants?.length || 0}/{room.maxPlayers})</span>
-            {room.status === 'starting' && <span className="text-accent animate-pulse">Battle starting soon...</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {room.participants?.map((p) => (
-              <div key={p.userId} className="flex items-center justify-between p-4 bg-secondary/20 border border-border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="font-mono font-bold text-lg">{p.username}</div>
-                  <Badge variant="outline" className="text-xs">{p.rating} LP</Badge>
-                  {p.isHost && <Badge variant="secondary" className="text-xs">HOST</Badge>}
-                </div>
-                <div>
-                  {p.isReady ? (
-                    <span className="flex items-center text-primary font-bold"><CheckCircle2 className="w-4 h-4 mr-1"/> Ready</span>
-                  ) : (
-                    <span className="flex items-center text-muted-foreground"><Loader2 className="w-4 h-4 mr-1 animate-spin"/> Waiting</span>
-                  )}
-                </div>
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Participants ({room.participants?.length || 0}/{room.maxPlayers})
+          </h2>
+          {room.status === 'starting' && <span className="text-xs font-medium text-primary animate-pulse">Starting...</span>}
+        </div>
+
+        <div className="bg-background border border-border divide-y divide-border">
+          {room.participants?.map((p) => (
+            <div key={p.userId} className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-4">
+                <div className="font-mono font-medium">{p.username}</div>
+                <div className="text-xs font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded-sm">{p.rating} LP</div>
+                {p.isHost && <span className="text-[10px] uppercase tracking-wider font-bold text-primary">Host</span>}
               </div>
-            ))}
-            
-            {Array.from({ length: Math.max(0, room.maxPlayers - (room.participants?.length || 0)) }).map((_, i) => (
-              <div key={i} className="flex items-center justify-center p-4 border border-dashed border-border rounded-lg text-muted-foreground/50">
-                <Users className="w-5 h-5 mr-2" /> Empty Slot
+              <div>
+                {p.isReady ? (
+                  <span className="text-xs font-medium text-green-600 flex items-center gap-1">
+                    <Check className="w-3 h-3"/> Ready
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Waiting
+                  </span>
+                )}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          ))}
+          
+          {Array.from({ length: Math.max(0, room.maxPlayers - (room.participants?.length || 0)) }).map((_, i) => (
+            <div key={i} className="flex items-center p-4 text-muted-foreground/40 border-l-[3px] border-transparent">
+              <span className="text-sm">Empty Slot</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

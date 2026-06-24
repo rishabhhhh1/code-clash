@@ -1,9 +1,7 @@
 import { useRoute, Link } from "wouter";
 import { useGetBattle, getGetBattleQueryKey } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Trophy, Home, Swords, Clock, Check } from "lucide-react";
+import { ArrowRight, Trophy } from "lucide-react";
 
 export default function BattleResults() {
   const [, params] = useRoute("/battle/:battleId/results");
@@ -16,7 +14,7 @@ export default function BattleResults() {
     }
   });
 
-  if (isLoading || !battle) return <div className="p-8 text-center">Loading results...</div>;
+  if (isLoading || !battle) return <div className="p-12 text-center text-sm font-mono text-muted-foreground">Loading results...</div>;
 
   const winner = battle.participants?.find(p => p.userId === battle.winnerId);
   const sortedParticipants = [...(battle.participants || [])].sort((a, b) => a.rank_position - b.rank_position);
@@ -29,85 +27,72 @@ export default function BattleResults() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <div className="text-center space-y-4 py-8">
-        <Badge variant="outline" className="border-accent text-accent mb-4">MATCH CONCLUDED</Badge>
+    <div className="max-w-4xl mx-auto py-12 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="text-center space-y-6">
+        <div className="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-muted-foreground mb-4">
+          Match Concluded
+        </div>
         
         {winner ? (
-          <>
-            <Trophy className="w-20 h-20 text-yellow-500 mx-auto mb-4" />
-            <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-400 to-yellow-600">
-              {winner.username} WINS
+          <div>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-4 text-foreground">
+              {winner.username}
             </h1>
-            <p className="text-xl text-muted-foreground mt-4">
-              Solved {battle.problem.title} in <span className="font-mono text-foreground">{formatTime(winner.solveTimeSeconds!)}</span>
+            <p className="text-muted-foreground text-lg">
+              Solved in <span className="font-mono text-primary font-medium">{formatTime(winner.solveTimeSeconds!)}</span>
             </p>
-          </>
+          </div>
         ) : (
-          <>
-            <h1 className="text-4xl font-black text-muted-foreground">DRAW</h1>
-            <p className="text-xl text-muted-foreground mt-4">No one solved the problem in time.</p>
-          </>
+          <div>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-4 text-muted-foreground">
+              DRAW
+            </h1>
+            <p className="text-muted-foreground text-lg">Time expired without a solution.</p>
+          </div>
         )}
       </div>
 
-      <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-        <CardHeader className="border-b border-border">
-          <CardTitle>Final Standings</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-border">
-            {sortedParticipants.map((p, i) => (
-              <div key={p.userId} className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 ${i === 0 && winner ? 'bg-yellow-500/10' : ''}`}>
-                <div className="flex items-center gap-4">
-                  <div className={`text-2xl font-black w-8 text-center ${i === 0 && winner ? 'text-yellow-500' : 'text-muted-foreground'}`}>
-                    #{p.rank_position}
-                  </div>
-                  <div>
-                    <div className="font-bold text-lg">{p.username}</div>
-                    <div className="text-sm text-muted-foreground">Rating: {p.rating}</div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-8 mt-4 sm:mt-0 text-sm font-mono">
-                  <div className="flex flex-col items-center">
-                    <span className="text-muted-foreground mb-1">Status</span>
-                    {p.solved ? (
-                      <Badge className="bg-green-500 hover:bg-green-600"><Check className="w-3 h-3 mr-1"/> AC</Badge>
-                    ) : (
-                      <Badge variant="destructive">FAILED</Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-muted-foreground mb-1">Time</span>
-                    <span className="font-bold">{formatTime(p.solveTimeSeconds || 0)}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-muted-foreground mb-1">Attempts</span>
-                    <span className="font-bold">{p.attempts}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-muted-foreground mb-1">Penalty</span>
-                    <span className="font-bold text-red-400">+{p.penalty}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="border border-border bg-background">
+        <div className="p-4 border-b border-border bg-secondary/20">
+          <h2 className="text-sm font-semibold">Final Standings</h2>
+        </div>
+        <div className="divide-y divide-border overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-muted-foreground uppercase bg-background">
+              <tr>
+                <th className="px-6 py-4 font-medium w-16">Rank</th>
+                <th className="px-6 py-4 font-medium">Player</th>
+                <th className="px-6 py-4 font-medium text-right">Time</th>
+                <th className="px-6 py-4 font-medium text-right">Attempts</th>
+                <th className="px-6 py-4 font-medium text-right">Penalty</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sortedParticipants.map((p, i) => (
+                <tr key={p.userId} className={i === 0 && winner ? 'bg-primary/5' : ''}>
+                  <td className="px-6 py-4 font-mono text-muted-foreground">{p.rank_position}</td>
+                  <td className="px-6 py-4 font-medium">{p.username}</td>
+                  <td className={`px-6 py-4 font-mono text-right ${p.solved ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {p.solved ? formatTime(p.solveTimeSeconds || 0) : '--:--'}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-right">{p.attempts}</td>
+                  <td className="px-6 py-4 font-mono text-right text-muted-foreground">+{p.penalty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <div className="flex justify-center gap-4 pt-8">
-        <Link href="/">
-          <Button variant="outline" size="lg" className="gap-2">
-            <Home className="w-5 h-5" /> Return to Lobby
-          </Button>
-        </Link>
-        <Link href="/room/create">
-          <Button size="lg" className="bg-accent hover:bg-accent/90 gap-2">
-            <Swords className="w-5 h-5" /> New Battle
-          </Button>
-        </Link>
+      <div className="flex justify-center gap-4 pt-4">
+        <Button variant="outline" asChild>
+          <Link href="/">Back to Arena</Link>
+        </Button>
+        <Button asChild className="group">
+          <Link href="/room/create" className="flex items-center gap-2">
+            New Battle <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </Button>
       </div>
     </div>
   );

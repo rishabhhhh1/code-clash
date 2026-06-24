@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetBattle, getGetBattleQueryKey, useRecordSubmission } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ExternalLink, Check, X, Clock, Trophy } from "lucide-react";
+import { ExternalLink, Clock, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 
 export default function BattleView() {
   const [, params] = useRoute("/battle/:battleId");
@@ -25,7 +24,6 @@ export default function BattleView() {
   const submitMutation = useRecordSubmission();
   const [verdict, setVerdict] = useState("OK");
   const [subId, setSubId] = useState("");
-
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -56,11 +54,11 @@ export default function BattleView() {
       }
     }, {
       onSuccess: () => {
-        toast({ title: "Submission recorded", description: verdict === "OK" ? "AC! You solved it." : `Verdict: ${verdict}` });
+        toast({ title: "Recorded", description: verdict === "OK" ? "Accepted!" : verdict.replace(/_/g, ' ') });
         setSubId("");
       },
       onError: (err: any) => {
-        toast({ title: "Failed to record", description: err.message, variant: "destructive" });
+        toast({ title: "Error", description: err.message, variant: "destructive" });
       }
     });
   };
@@ -71,129 +69,111 @@ export default function BattleView() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (isLoading || !battle) return <div className="p-8 text-center">Loading battle data...</div>;
+  if (isLoading || !battle) return <div className="p-12 text-center text-sm font-mono text-muted-foreground">Loading battle data...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-6">
+    <div className="h-full flex flex-col pt-4 pb-12 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-primary flex items-center gap-2">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive"></span>
-            </span>
-            LIVE BATTLE
-          </h1>
-          <p className="text-muted-foreground font-mono mt-2">Arena: {battle.roomCode}</p>
-        </div>
-        <div className="text-right">
-          <div className="text-4xl font-mono font-bold font-tabular-nums text-accent">
-            {formatTime(elapsed)}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Live Match</span>
           </div>
+          <h1 className="text-2xl font-bold tracking-tight">Room {battle.roomCode}</h1>
         </div>
-      </div>
+        <div className="text-3xl font-mono font-medium tracking-tight">
+          {formatTime(elapsed)}
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Problem & Submit */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-primary/20">
-            <CardHeader className="bg-primary/5 pb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <Badge variant="outline" className="mb-2">Problem {battle.problem.problemIndex}</Badge>
-                  <CardTitle className="text-2xl">{battle.problem.title}</CardTitle>
-                  <div className="flex gap-2 mt-2">
-                    <Badge variant="secondary">Rating: {battle.problem.rating}</Badge>
-                    {battle.problem.tags?.slice(0,3).map((tag: string) => (
-                      <Badge key={tag} variant="outline" className="text-xs text-muted-foreground">{tag}</Badge>
-                    ))}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <section className="lg:col-span-2 space-y-8">
+          <div className="border border-border p-6 sm:p-8 bg-background">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <div className="text-sm font-mono text-muted-foreground mb-2">Problem {battle.problem.problemIndex}</div>
+                <h2 className="text-2xl font-semibold">{battle.problem.title}</h2>
+              </div>
+              <Button variant="outline" size="sm" asChild className="hidden sm:flex">
+                <a href={battle.problem.cfUrl} target="_blank" rel="noreferrer">
+                  Open <ExternalLink className="w-3 h-3 ml-2" />
+                </a>
+              </Button>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 mb-8">
+              <span className="text-xs font-mono px-2 py-1 bg-secondary rounded-sm">Rating {battle.problem.rating}</span>
+              {battle.problem.tags?.slice(0,3).map((tag: string) => (
+                <span key={tag} className="text-xs font-mono px-2 py-1 border border-border text-muted-foreground rounded-sm">{tag}</span>
+              ))}
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-sm font-medium mb-4">Record Submission</h3>
+              <form onSubmit={handleSubmitVerdict} className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="space-y-1.5 w-full sm:w-auto flex-1">
+                  <label className="text-xs font-medium text-muted-foreground">Submission ID</label>
+                  <Input 
+                    type="number" 
+                    value={subId}
+                    onChange={(e) => setSubId(e.target.value)}
+                    placeholder="e.g. 12345678"
+                    required
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5 w-full sm:w-48">
+                  <label className="text-xs font-medium text-muted-foreground">Verdict</label>
+                  <Select value={verdict} onValueChange={setVerdict}>
+                    <SelectTrigger className="font-mono text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="OK" className="font-medium text-primary">Accepted (AC)</SelectItem>
+                      <SelectItem value="WRONG_ANSWER">Wrong Answer (WA)</SelectItem>
+                      <SelectItem value="TIME_LIMIT_EXCEEDED">Time Limit (TLE)</SelectItem>
+                      <SelectItem value="RUNTIME_ERROR">Runtime Error (RE)</SelectItem>
+                      <SelectItem value="COMPILATION_ERROR">Compilation (CE)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" disabled={submitMutation.isPending} className="w-full sm:w-auto">
+                  Submit
+                </Button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-background border border-border">
+          <div className="p-4 border-b border-border bg-secondary/20">
+            <h3 className="text-sm font-semibold tracking-tight flex items-center gap-2">
+              <Target className="w-4 h-4 text-muted-foreground" /> Standings
+            </h3>
+          </div>
+          <div className="divide-y divide-border">
+            {battle.participants?.sort((a,b) => a.rank_position - b.rank_position).map((p) => (
+              <div key={p.userId} className={`p-4 flex items-center justify-between ${p.solved ? 'bg-primary/5' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <div className="font-mono text-xs text-muted-foreground w-4">{p.rank_position}</div>
+                  <div>
+                    <div className="font-medium text-sm">{p.username}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase">{p.attempts} attempts</div>
                   </div>
                 </div>
-                <Button variant="outline" asChild>
-                  <a href={battle.problem.cfUrl} target="_blank" rel="noreferrer">
-                    Open in Codeforces <ExternalLink className="w-4 h-4 ml-2" />
-                  </a>
-                </Button>
+                <div className="text-right text-sm font-mono">
+                  {p.solved ? (
+                    <div className="text-primary font-medium">{formatTime(p.solveTimeSeconds || 0)}</div>
+                  ) : p.attempts > 0 ? (
+                    <div className="text-destructive text-xs">{p.lastVerdict === 'WRONG_ANSWER' ? 'WA' : 'ERR'}</div>
+                  ) : (
+                    <div className="text-muted-foreground/50">--:--</div>
+                  )}
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="p-4 bg-secondary/30 rounded-lg border border-border">
-                <h3 className="font-bold mb-4">Record your Codeforces submission</h3>
-                <form onSubmit={handleSubmitVerdict} className="flex gap-4 items-end">
-                  <div className="space-y-2 flex-1">
-                    <label className="text-xs text-muted-foreground">CF Submission ID</label>
-                    <input 
-                      type="number" 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-                      value={subId}
-                      onChange={(e) => setSubId(e.target.value)}
-                      placeholder="e.g. 12345678"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2 flex-1">
-                    <label className="text-xs text-muted-foreground">Verdict</label>
-                    <Select value={verdict} onValueChange={setVerdict}>
-                      <SelectTrigger className="font-mono">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OK" className="text-green-500 font-bold">Accepted (OK)</SelectItem>
-                        <SelectItem value="WRONG_ANSWER" className="text-red-500">Wrong Answer (WA)</SelectItem>
-                        <SelectItem value="TIME_LIMIT_EXCEEDED" className="text-yellow-500">Time Limit (TLE)</SelectItem>
-                        <SelectItem value="RUNTIME_ERROR" className="text-purple-500">Runtime Error (RE)</SelectItem>
-                        <SelectItem value="COMPILATION_ERROR">Compilation Error (CE)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" disabled={submitMutation.isPending}>Submit</Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Leaderboard */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2"><Trophy className="w-5 h-5 text-primary" /> Live Standings</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {battle.participants?.sort((a,b) => a.rank_position - b.rank_position).map((p) => (
-                  <div key={p.userId} className={`p-4 flex items-center justify-between ${p.solved ? 'bg-green-500/10' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="font-mono font-bold w-6 text-muted-foreground">{p.rank_position}</div>
-                      <div>
-                        <div className="font-bold">{p.username}</div>
-                        <div className="text-xs text-muted-foreground">{p.attempts} attempts</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {p.solved ? (
-                        <div className="text-green-500 font-bold flex items-center gap-1">
-                          <Check className="w-4 h-4" />
-                          {formatTime(p.solveTimeSeconds || 0)}
-                        </div>
-                      ) : p.attempts > 0 ? (
-                        <div className="text-red-500 flex items-center gap-1">
-                          <X className="w-4 h-4" />
-                          {p.lastVerdict === 'WRONG_ANSWER' ? 'WA' : p.lastVerdict}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          --:--
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
